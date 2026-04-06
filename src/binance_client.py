@@ -12,7 +12,8 @@ from src.logger import logger
 class BinanceClient:
     def __init__(self):
         self._exchange: Optional[ccxt.binance] = None
-        self._testnet = config.binance.get('testnet', True)
+        self._api_key = config.binance.get('api_key', '')
+        self._api_secret = config.binance.get('api_secret', '')
         self._init_exchange()
 
     def _init_exchange(self) -> None:
@@ -25,7 +26,8 @@ class BinanceClient:
             }
         }
         
-        if self._testnet:
+        if not self._api_key or not self._api_secret:
+            logger.warning("API key/secret not provided - falling back to testnet")
             self._exchange = ccxt.binance({
                 'urls': {
                     'api': {
@@ -37,15 +39,9 @@ class BinanceClient:
             })
             logger.info("Binance Testnet mode initialized (Hedge Mode)")
         else:
-            api_key = config.binance.get('api_key', '')
-            api_secret = config.binance.get('api_secret', '')
-            
-            if not api_key or not api_secret:
-                raise ValueError("API key and secret required for live mode")
-            
             self._exchange = ccxt.binance({
-                'apiKey': api_key,
-                'secret': api_secret,
+                'apiKey': self._api_key or None,
+                'secret': self._api_secret or None,
                 'enableRateLimit': True,
                 'options': {
                     'defaultType': 'future',
@@ -53,7 +49,15 @@ class BinanceClient:
                     'hedged': True,
                 }
             })
-            logger.info("Binance Live mode initialized (Hedge Mode)")
+            logger.info("Binance Live exchange initialized for market data")
+
+    @property
+    def is_testnet(self) -> bool:
+        return not self._api_key or not self._api_secret
+    
+    @property
+    def has_credentials(self) -> bool:
+        return bool(self._api_key and self._api_secret)
 
     @property
     def exchange(self) -> ccxt.binance:
@@ -209,7 +213,6 @@ class BinanceClient:
 class BinanceWebSocket:
     def __init__(self):
         self._ws: Optional[websocket.WebSocketApp] = None
-        self._testnet = config.binance.get('testnet', True)
         self._running = False
         self._thread: Optional[threading.Thread] = None
         self._subscribers: Dict[str, List[Callable]] = {}

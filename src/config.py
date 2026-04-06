@@ -58,6 +58,10 @@ class Config:
     @property
     def is_paper_mode(self) -> bool:
         return self.trading.get('mode', 'paper') == 'paper'
+    
+    @property
+    def use_live_market_data(self) -> bool:
+        return not self.is_paper_mode or bool(self.binance.get('api_key') and self.binance.get('api_secret'))
 
     def get(self, key: str, default: Any = None) -> Any:
         return self._config.get(key, default) if self._config else default

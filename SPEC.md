@@ -76,11 +76,11 @@ Score = (RSI_Uygunluk * 0.20) + (ADR * 0.15) + (VolScore * 0.15) + (Momentum * 0
 
 ```yaml
 binance:
-  api_key: "API_KEY"
+  api_key: "API_KEY"      # Paper mod için de doldur (canlı veri için gerekli)
   api_secret: "API_SECRET"
-  testnet: true  # true = testnet, false = live
 
 trading:
+  mode: paper             # paper = canlı veri + simüle, live = gerçek işlem
   leverage: 10
   entry_percent: 1.0      # %1 sermaye
   stop_loss_percent: 2.0 # %2

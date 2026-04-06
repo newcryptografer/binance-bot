@@ -1,10 +1,10 @@
 binance:
-  api_key: ""          # Fill for live mode
-  api_secret: ""       # Fill for live mode
-  testnet: true        # true = testnet, false = live
+  api_key: ""          # Fill for both live and paper mode (required for live market data)
+  api_secret: ""       # Fill for both live and paper mode
+  # testnet removed - use mode in trading section instead
 
 trading:
-  mode: paper          # paper or live
+  mode: paper          # paper (live data, simulated trades) or live (real trades)
   leverage: 10          # 1-125x
   entry_percent: 1.0   # % of balance per trade
   stop_loss_percent: 2.0

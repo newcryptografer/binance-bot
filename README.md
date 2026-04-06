@@ -18,12 +18,11 @@ pip install ccxt pandas numpy pyyaml python-dotenv
 
 ```yaml
 binance:
-  api_key: "API_KEY"        # Live mod için doldur
-  api_secret: "API_SECRET"  # Live mod için doldur
-  testnet: true             # true = testnet, false = live
+  api_key: "API_KEY"        # Paper mod için de doldur (canlı veri için gerekli)
+  api_secret: "API_SECRET"  # Paper mod için de doldur
 
 trading:
-  mode: paper               # paper veya live
+  mode: paper               # paper = canlı veri + simüle işlem, live = gerçek işlem
   leverage: 10
   entry_percent: 1.0
   stop_loss_percent: 2.0
@@ -46,7 +45,7 @@ risk:
 ## Çalıştırma
 
 ```bash
-# Paper mod (testnet - risksiz)
+# Paper mod (canlı veri + risksiz işlem - ÖNERİLEN)
 python main.py --mode paper
 
 # Live mod (gerçek işlem)
@@ -85,9 +84,10 @@ python main.py --mode live
 
 ## Güvenlik
 
-1. İlk olarak `testnet: true` ve `mode: paper` ile test edin
+1. İlk olarak `mode: paper` ile test edin (API key gerekli - canlı veri için)
 2. API key'inizi `config.yaml` veya `.env` dosyasına girin
 3. Risk limitlerini ihtiyacınıza göre ayarlayın
+4. `mode: live` ile gerçek işleme geçmeden önce paper modda yeterli test yapın
 
 ## Not
 

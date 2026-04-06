@@ -120,12 +120,14 @@ class TradingBot:
         TerminalUI.print_header(f"Binance Futures Trading Bot - {mode} Mode")
         TerminalUI.print_balance(self._last_balance, 0, mode)
         
-        if not config.is_paper_mode:
+        if binance_client.has_credentials:
             try:
                 binance_client.exchange.set_position_mode(True)
                 logger.info("Hedge mode enabled")
             except Exception as e:
                 logger.warning(f"Could not set hedge mode: {e}")
+        else:
+            logger.warning("No API credentials - running in testnet fallback mode")
 
         binance_ws.connect()
         logger.info("WebSocket stream connected")
@@ -325,6 +327,79 @@ class TradingBot:
         logger.info(f"Trade opened: {symbol} {direction} @ {entry_price}, Amount: {amount}, SL: {sl_price}")
 
     def _monitor_positions(self):
+        if config.is_paper_mode:
+            self._monitor_paper_positions()
+        else:
+            self._monitor_live_positions()
+    
+    def _monitor_paper_positions(self):
+        closed_symbols = []
+        for symbol in list(self._active_trades.keys()):
+            try:
+                ticker = binance_client.fetch_ticker(symbol)
+                current_price = float(ticker['last'])
+            except:
+                continue
+            
+            trade = self._active_trades[symbol]
+            direction = trade['direction']
+            entry_price = trade['entry_price']
+            amount = trade['amount']
+            
+            tp1_hit = trade.get('tp1_filled', False)
+            tp2_hit = trade.get('tp2_filled', False)
+            
+            if direction == 'LONG':
+                pnl_pct = (current_price - entry_price) / entry_price * 100
+                if not tp1_hit and current_price >= trade['tp1_price']:
+                    trade['tp1_filled'] = True
+                    logger.info(f"[PAPER] TP1 hit: {symbol} @ {current_price}")
+                if not tp2_hit and current_price >= trade['tp2_price']:
+                    trade['tp2_filled'] = True
+                    logger.info(f"[PAPER] TP2 hit: {symbol} @ {current_price}")
+                if current_price <= trade['sl_price']:
+                    closed_symbols.append(symbol)
+                    pnl = (trade['sl_price'] - entry_price) * amount
+                elif trade['tp1_filled'] and trade['tp2_filled']:
+                    closed_symbols.append(symbol)
+                    pnl = (trade['tp2_price'] - entry_price) * amount
+                else:
+                    pnl = (current_price - entry_price) * amount
+            else:
+                pnl_pct = (entry_price - current_price) / entry_price * 100
+                if not tp1_hit and current_price <= trade['tp1_price']:
+                    trade['tp1_filled'] = True
+                    logger.info(f"[PAPER] TP1 hit: {symbol} @ {current_price}")
+                if not tp2_hit and current_price <= trade['tp2_price']:
+                    trade['tp2_filled'] = True
+                    logger.info(f"[PAPER] TP2 hit: {symbol} @ {current_price}")
+                if current_price >= trade['sl_price']:
+                    closed_symbols.append(symbol)
+                    pnl = (entry_price - trade['sl_price']) * amount
+                elif trade['tp1_filled'] and trade['tp2_filled']:
+                    closed_symbols.append(symbol)
+                    pnl = (entry_price - trade['tp2_price']) * amount
+                else:
+                    pnl = (entry_price - current_price) * amount
+            
+            if symbol in closed_symbols:
+                risk_manager.record_trade(pnl)
+                logger.info(f"[PAPER] Position closed: {symbol}, PnL: {pnl:.2f} USDT")
+                self._trade_history.append({
+                    'symbol': symbol,
+                    'direction': trade['direction'],
+                    'entry_price': entry_price,
+                    'exit_price': current_price,
+                    'amount': amount,
+                    'pnl': pnl,
+                    'closed_at': datetime.now().isoformat(),
+                })
+                trailing_engine.remove_position(symbol)
+        
+        for symbol in closed_symbols:
+            del self._active_trades[symbol]
+    
+    def _monitor_live_positions(self):
         positions = binance_client.fetch_positions()
         
         closed_symbols = []
@@ -377,8 +452,34 @@ class TradingBot:
 
     def _close_all_positions(self):
         print("Closing all positions...")
-        for symbol, pos in list(self._active_trades.items()):
-            order_manager.close_position(symbol, pos['direction'], pos['amount'])
+        if config.is_paper_mode:
+            for symbol, pos in list(self._active_trades.items()):
+                try:
+                    ticker = binance_client.fetch_ticker(symbol)
+                    current_price = float(ticker['last'])
+                except:
+                    current_price = pos['entry_price']
+                
+                if pos['direction'] == 'LONG':
+                    pnl = (current_price - pos['entry_price']) * pos['amount']
+                else:
+                    pnl = (pos['entry_price'] - current_price) * pos['amount']
+                
+                logger.info(f"[PAPER] Closed {symbol}, PnL: {pnl:.2f} USDT")
+                self._trade_history.append({
+                    'symbol': symbol,
+                    'direction': pos['direction'],
+                    'entry_price': pos['entry_price'],
+                    'exit_price': current_price,
+                    'amount': pos['amount'],
+                    'pnl': pnl,
+                    'closed_at': datetime.now().isoformat(),
+                })
+            
+            self._active_trades.clear()
+        else:
+            for symbol, pos in list(self._active_trades.items()):
+                order_manager.close_position(symbol, pos['direction'], pos['amount'])
 
 
 def parse_args():
