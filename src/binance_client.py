@@ -269,7 +269,11 @@ class BinanceWebSocket:
     
     def _on_open(self, ws):
         logger.info("WebSocket connection opened")
-        subscribe_msg = {"method": "SUBSCRIBE", "params": ["!ticker@arr"], "id": 1}
+        subscribe_msg = {
+            "method": "SUBSCRIBE", 
+            "params": ["btcusdt@ticker", "ethusdt@ticker", "solusdt@ticker"],
+            "id": 1
+        }
         ws.send(json.dumps(subscribe_msg))
     
     def _on_message(self, ws, message):
