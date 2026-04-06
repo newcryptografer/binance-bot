@@ -59,6 +59,8 @@ class RiskManager:
         if position_size < min_notional:
             position_size = min_notional
         
+        return int(position_size)
+        
         precision = self._get_quantity_precision(symbol)
         return round(position_size, precision)
 
