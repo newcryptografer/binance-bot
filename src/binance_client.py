@@ -78,13 +78,17 @@ class BinanceClient:
         for m in markets.values():
             symbol = m.get('symbol', '')
             if (m.get('quote') == 'USDT' or m.get('quote') == 'USD') and m.get('type') == 'future':
-                # Filter: perpetual contracts only (no date like 260626)
+                # Filter: perpetual contracts only (no date like 260626 or 260327)
+                # Format: BTC/USDT:USDT-260327 (with date) vs BTC/USDT:USDT (perpetual)
                 if ':' in symbol:
                     base = symbol.split(':')[-1]
                 else:
                     base = symbol.split('/')[-1] if '/' in symbol else symbol
-                # Skip if ends with year/month (like 260626)
-                if len(base) >= 4 and base[:4].isdigit():
+                # Skip if base ends with 6-digit date (like 260327)
+                if len(base) >= 6 and base[-6:].isdigit():
+                    continue
+                # Also skip if contains dash followed by digits
+                if '-' in base and any(c.isdigit() for c in base.split('-')[-1]):
                     continue
                 usdt_futures.append(m)
         
