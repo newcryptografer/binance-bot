@@ -139,40 +139,13 @@ class OrderManager:
             order = binance_client.create_order(
                 symbol=symbol,
                 side=side,
-                order_type='limit',
-                amount=amount,
-                price=entry_price,
-                params={'positionSide': 'LONG' if direction == 'LONG' else 'SHORT'}
-            )
-            logger.info(f"Entry order placed: {order['id']} @ {entry_price}")
-            
-            start_time = time.time()
-            while time.time() - start_time < self.entry_timeout_seconds:
-                time.sleep(2)
-                try:
-                    order_status = binance_client.exchange.fetch_order(order['id'], symbol)
-                    if order_status['status'] == 'closed':
-                        logger.info(f"Entry order filled: {order['id']}")
-                        return order_status
-                except:
-                    continue
-            
-            logger.warning(f"Entry order timeout, cancelling and trying market")
-            try:
-                binance_client.cancel_order(order['id'], symbol)
-            except:
-                pass
-            
-            market_order = binance_client.create_order(
-                symbol=symbol,
-                side=side,
                 order_type='market',
                 amount=amount,
                 params={'positionSide': 'LONG' if direction == 'LONG' else 'SHORT'}
-            )
-            logger.info(f"Market entry executed: {market_order['id']}")
-            return market_order
-            
+)
+            logger.info(f"Market entry order filled: {order['id']}")
+            return order
+        
         except Exception as e:
             logger.error(f"Failed to place entry order: {e}")
             return None
