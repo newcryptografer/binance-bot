@@ -78,6 +78,7 @@ class BinanceClient:
             m for m in markets.values()
             if m.get('quote') == 'USDT' and m.get('type') == 'future'
         ]
+        logger.info(f"[DEBUG] Total markets: {len(markets)}, USDT futures: {len(usdt_futures)}")
         return usdt_futures
 
     def fetch_ticker(self, symbol: str) -> Dict[str, Any]:
