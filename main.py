@@ -284,6 +284,22 @@ class TradingBot:
         
         amount = risk_manager.calculate_position_size(symbol, direction)
         
+        if config.is_paper_mode:
+            logger.info(f"[PAPER] Would trade: {direction} {symbol} amount={amount}")
+            self._active_trades[symbol] = {
+                'direction': direction,
+                'entry_price': signal.get('entry_price'),
+                'amount': amount,
+                'sl_price': signal.get('entry_price', 0) * 0.98,
+                'tp1_price': signal.get('entry_price', 0) * 1.03,
+                'tp2_price': signal.get('entry_price', 0) * 1.05,
+                'tp1_filled': False,
+                'tp2_filled': False,
+                'created_at': datetime.now(),
+            }
+            return
+        
+        # 1. Market entry order
         entry_result = order_manager.place_entry_order(
             symbol=symbol,
             direction=direction,
@@ -291,16 +307,56 @@ class TradingBot:
             vwap=signal['vwap'],
             current_price=signal['entry_price']
         )
-
+        
         if not entry_result:
             logger.error(f"Failed to execute entry for {symbol}")
             return
-
+        
         entry_price = entry_result.get('price', signal['entry_price'])
         
         price_data = order_manager.calculate_prices_with_orderbook(
             symbol, direction, signal['vwap'], signal['entry_price']
         )
+        
+        # 2. TP1 + TP2 + SL - HEPARİ BİRLİKTE GÖNDER
+        tp_orders = order_manager.place_tp_orders(
+            symbol=symbol,
+            direction=direction,
+            amount=amount,
+            entry_price=entry_price
+        )
+        
+        sl_order = order_manager.place_sl_order(
+            symbol=symbol,
+            direction=direction,
+            amount=amount,
+            entry_price=entry_price
+        )
+        
+        self._active_trades[symbol] = {
+            'direction': direction,
+            'entry_price': entry_price,
+            'amount': amount,
+            'sl_price': price_data['sl_price'],
+            'tp1_price': price_data['tp1_price'],
+            'tp2_price': price_data['tp2_price'],
+            'tp1_filled': False,
+            'tp2_filled': False,
+            'created_at': datetime.now(),
+            'entry_order_id': entry_result.get('id'),
+            'tp_orders': tp_orders,
+            'sl_order_id': sl_order.get('id') if sl_order else None,
+            'vwap': signal.get('vwap'),
+            'tp1_reason': price_data.get('tp1_reason', ''),
+            'tp2_reason': price_data.get('tp2_reason', ''),
+        }
+        
+        logger.info(f"[LIVE] Opened: {symbol} {direction}")
+        logger.info(f"  Entry: {entry_price}")
+        logger.info(f"  TP1: {price_data['tp1_price']} ({price_data.get('tp1_reason', '')})")
+        logger.info(f"  TP2: {price_data['tp2_price']} ({price_data.get('tp2_reason', '')})")
+        logger.info(f"  SL: {price_data['sl_price']}")
+        logger.info(f"  All orders sent to exchange")
         
         tp_orders = order_manager.place_tp_orders(
             symbol=symbol,
