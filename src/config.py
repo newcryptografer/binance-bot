@@ -27,8 +27,6 @@ class Config:
         
         self._load_env_overrides()
         
-        print(f"[DEBUG] Config loaded - api_key: '{self._config.get('binance', {}).get('api_key', '')}'")
-        
         return self._config  # type: ignore[return-value]
 
     def _load_env_overrides(self) -> None:

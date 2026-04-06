@@ -12,11 +12,14 @@ from src.logger import logger
 class BinanceClient:
     def __init__(self):
         self._exchange: Optional[ccxt.binance] = None
-        self._api_key = config.binance.get('api_key', '')
-        self._api_secret = config.binance.get('api_secret', '')
-        self._init_exchange()
-
-    def _init_exchange(self) -> None:
+    
+    def _ensure_exchange(self) -> None:
+        if self._exchange is not None:
+            return
+        
+        api_key = config.binance.get('api_key', '')
+        api_secret = config.binance.get('api_secret', '')
+        
         exchange_opts = {
             'enableRateLimit': True,
             'options': {
@@ -26,7 +29,7 @@ class BinanceClient:
             }
         }
         
-        if not self._api_key or not self._api_secret:
+        if not api_key or not api_secret:
             logger.warning("API key/secret not provided - falling back to testnet")
             self._exchange = ccxt.binance({
                 'urls': {
@@ -40,8 +43,8 @@ class BinanceClient:
             logger.info("Binance Testnet mode initialized (Hedge Mode)")
         else:
             self._exchange = ccxt.binance({
-                'apiKey': self._api_key or None,
-                'secret': self._api_secret or None,
+                'apiKey': api_key,
+                'secret': api_secret,
                 'enableRateLimit': True,
                 'options': {
                     'defaultType': 'future',
@@ -53,16 +56,18 @@ class BinanceClient:
 
     @property
     def is_testnet(self) -> bool:
-        return not self._api_key or not self._api_secret
+        self._ensure_exchange()
+        return self._exchange is not None and 'testnet' in str(self._exchange.urls.get('api', {}).get('private', ''))
     
     @property
     def has_credentials(self) -> bool:
-        return bool(self._api_key and self._api_secret)
+        api_key = config.binance.get('api_key', '')
+        api_secret = config.binance.get('api_secret', '')
+        return bool(api_key and api_secret)
 
     @property
     def exchange(self) -> ccxt.binance:
-        if self._exchange is None:
-            self._init_exchange()
+        self._ensure_exchange()
         return self._exchange
 
     def fetch_markets(self) -> List[Dict[str, Any]]:
