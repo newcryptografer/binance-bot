@@ -78,19 +78,20 @@ class BinanceClient:
         for m in markets.values():
             symbol = m.get('symbol', '')
             if (m.get('quote') == 'USDT' or m.get('quote') == 'USD') and m.get('type') == 'future':
-                # Filter: perpetual contracts only (no date like 260626 or 260327)
-                # Format: BTC/USDT:USDT-260327 (with date) vs BTC/USDT:USDT (perpetual)
+                # Format: BTC/USDT:USDT = perpetual, BNB/USD:BNB-260626 = dated
                 if ':' in symbol:
-                    base = symbol.split(':')[-1]
-                else:
-                    base = symbol.split('/')[-1] if '/' in symbol else symbol
-                # Skip if base ends with 6-digit date (like 260327)
-                if len(base) >= 6 and base[-6:].isdigit():
-                    continue
-                # Also skip if contains dash followed by digits
-                if '-' in base and any(c.isdigit() for c in base.split('-')[-1]):
-                    continue
-                usdt_futures.append(m)
+                    last_part = symbol.split(':')[-1]
+                    # Perpetual: last part is just USDT or USD
+                    if last_part in ['USDT', 'USD']:
+                        usdt_futures.append(m)
+                    # Dated: last part has dash with date like BNB-260626
+                    elif '-' in last_part:
+                        # Check if after dash is date (6 digits)
+                        date_part = last_part.split('-')[-1]
+                        if len(date_part) == 6 and date_part.isdigit():
+                            continue  # Skip dated contracts
+                        else:
+                            usdt_futures.append(m)
         
         logger.info(f"[DEBUG] Total markets: {len(markets)}, USDT futures: {len(usdt_futures)}")
         print(f"[DEBUG] Sample symbols: {[m.get('symbol') for m in usdt_futures[:5]]}")
