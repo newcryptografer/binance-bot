@@ -77,24 +77,13 @@ class BinanceClient:
         usdt_futures = []
         for m in markets.values():
             symbol = m.get('symbol', '')
-            if (m.get('quote') == 'USDT' or m.get('quote') == 'USD') and m.get('type') == 'future':
-                # Format: BTC/USDT:USDT = perpetual, BNB/USD:BNB-260626 = dated
-                if ':' in symbol:
-                    last_part = symbol.split(':')[-1]
-                    # Perpetual: last part is just USDT or USD
-                    if last_part in ['USDT', 'USD']:
-                        usdt_futures.append(m)
-                    # Dated: last part has dash with date like BNB-260626
-                    elif '-' in last_part:
-                        # Check if after dash is date (6 digits)
-                        date_part = last_part.split('-')[-1]
-                        if len(date_part) == 6 and date_part.isdigit():
-                            continue  # Skip dated contracts
-                        else:
-                            usdt_futures.append(m)
+            # Perpetual: ends with :USDT (no date)
+            # Dated: ends with :USDT-260626
+            if symbol.endswith(':USDT'):
+                usdt_futures.append(m)
         
         logger.info(f"[DEBUG] Total markets: {len(markets)}, USDT futures: {len(usdt_futures)}")
-        print(f"[DEBUG] Sample symbols: {[m.get('symbol') for m in usdt_futures[:5]]}")
+        print(f"[DEBUG] Sample: {[m.get('symbol') for m in usdt_futures[:10]]}")
         return usdt_futures
 
     def fetch_ticker(self, symbol: str) -> Dict[str, Any]:
