@@ -76,7 +76,7 @@ class BinanceClient:
         markets = self.exchange.load_markets()
         usdt_futures = [
             m for m in markets.values()
-            if m.get('quote') == 'USDT' and m.get('type') == 'future'
+            if (m.get('quote') == 'USDT' or m.get('quote') == 'USD') and m.get('type') == 'future'
         ]
         logger.info(f"[DEBUG] Total markets: {len(markets)}, USDT futures: {len(usdt_futures)}")
         return usdt_futures
