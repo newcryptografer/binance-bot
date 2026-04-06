@@ -8,7 +8,7 @@ import time
 
 class OrderManager:
     def __init__(self):
-        self.leverage = config.trading.get('leverage', 10)
+        self.leverage = int(config.trading.get('leverage', 10))
         self.tp1_percent = config.trading.get('tp1_percent', 3.0)
         self.tp2_percent = config.trading.get('tp2_percent', 5.0)
         self.sl_percent = config.trading.get('stop_loss_percent', 2.0)
