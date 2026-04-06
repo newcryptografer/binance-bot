@@ -29,6 +29,7 @@ class OrderManager:
         ob_data = binance_client.get_liquidity_zones(symbol, current_price)
         
         if direction == 'LONG':
+            # Entry: VWAP destek + Orderbook birleşimi
             entry_price = ob_data.get('entry_bid', current_price * 0.998)
             if entry_price > current_price * 0.999:
                 entry_price = current_price * 0.999
@@ -36,12 +37,24 @@ class OrderManager:
             strong_support = min(vwap, ob_data.get('strong_bid', vwap * 0.99))
             entry_price = min(entry_price, strong_support)
             
-            tp1 = entry_price * (1 + self.tp1_percent / 100)
-            tp2 = entry_price * (1 + self.tp2_percent / 100)
+            # SL: Entry'nin altı (%2)
             sl = entry_price * (1 - self.sl_percent / 100)
             
-            entry_reason = f"Orderbook bid zone (strong_bid: {ob_data.get('strong_bid')})"
+            # TP1: VWAP direnç + Orderbook (%3)
+            vwap_r1 = vwap * 1.03
+            ob_r1 = ob_data.get('strong_ask', current_price * 1.03)
+            tp1 = min(vwap_r1, ob_r1)
+            
+            # TP2: VWAP üstü + Orderbook (%5)
+            vwap_r2 = vwap * 1.05
+            ob_r2 = ob_data.get('strong_ask', current_price * 1.05) * 1.02
+            tp2 = min(vwap_r2, ob_r2)
+            
+            entry_reason = f"Entry: {entry_price:.4f} (VWAP:{vwap:.4f} + OB)"
+            tp1_reason = f"TP1: {tp1:.4f} (VWAP:{vwap*1.03:.4f} + OB)"
+            tp2_reason = f"TP2: {tp2:.4f} (VWAP:{vwap*1.05:.4f} + OB)"
         else:
+            # Entry: VWAP direnç + Orderbook
             entry_price = ob_data.get('entry_ask', current_price * 1.002)
             if entry_price < current_price * 1.001:
                 entry_price = current_price * 1.001
@@ -49,11 +62,22 @@ class OrderManager:
             strong_resistance = max(vwap, ob_data.get('strong_ask', vwap * 1.01))
             entry_price = max(entry_price, strong_resistance)
             
-            tp1 = entry_price * (1 - self.tp1_percent / 100)
-            tp2 = entry_price * (1 - self.tp2_percent / 100)
+            # SL: Entry'nin üstü (%2)
             sl = entry_price * (1 + self.sl_percent / 100)
             
-            entry_reason = f"Orderbook ask zone (strong_ask: {ob_data.get('strong_ask')})"
+            # TP1: VWAP destek + Orderbook (%3)
+            vwap_s1 = vwap * 0.97
+            ob_s1 = ob_data.get('strong_bid', current_price * 0.97)
+            tp1 = max(vwap_s1, ob_s1)
+            
+            # TP2: VWAP altı + Orderbook (%5)
+            vwap_s2 = vwap * 0.95
+            ob_s2 = ob_data.get('strong_bid', current_price * 0.95) * 0.98
+            tp2 = max(vwap_s2, ob_s2)
+            
+            entry_reason = f"Entry: {entry_price:.4f} (VWAP:{vwap:.4f} + OB)"
+            tp1_reason = f"TP1: {tp1:.4f} (VWAP:{vwap*0.97:.4f} + OB)"
+            tp2_reason = f"TP2: {tp2:.4f} (VWAP:{vwap*0.95:.4f} + OB)"
 
         precision = self._get_price_precision(symbol)
         
@@ -66,6 +90,9 @@ class OrderManager:
             'bid_volume': ob_data.get('bid_volume', 0),
             'ask_volume': ob_data.get('ask_volume', 0),
             'entry_reason': entry_reason,
+            'tp1_reason': tp1_reason,
+            'tp2_reason': tp2_reason,
+            'vwap': vwap,
         }
 
     def calculate_tp_prices(self, entry_price: float, direction: str) -> tuple:
