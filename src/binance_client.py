@@ -20,6 +20,8 @@ class BinanceClient:
         api_key = config.binance.get('api_key', '')
         api_secret = config.binance.get('api_secret', '')
         
+        print(f"[DEBUG] _ensure_exchange: api_key='{api_key}', api_secret='{api_secret}'")
+        
         exchange_opts = {
             'enableRateLimit': True,
             'options': {
