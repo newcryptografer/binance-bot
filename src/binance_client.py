@@ -76,12 +76,20 @@ class BinanceClient:
         markets = self.exchange.load_markets()
         usdt_futures = []
         for m in markets.values():
+            symbol = m.get('symbol', '')
             if (m.get('quote') == 'USDT' or m.get('quote') == 'USD') and m.get('type') == 'future':
-                symbol_part = m.get('symbol', '').split(':')[-1] if ':' in m.get('symbol', '') else ''
-                if not any(c.isdigit() for c in symbol_part[:4] if len(symbol_part) >= 4):
-                    usdt_futures.append(m)
+                # Filter: perpetual contracts only (no date like 260626)
+                if ':' in symbol:
+                    base = symbol.split(':')[-1]
+                else:
+                    base = symbol.split('/')[-1] if '/' in symbol else symbol
+                # Skip if ends with year/month (like 260626)
+                if len(base) >= 4 and base[:4].isdigit():
+                    continue
+                usdt_futures.append(m)
         
         logger.info(f"[DEBUG] Total markets: {len(markets)}, USDT futures: {len(usdt_futures)}")
+        print(f"[DEBUG] Sample symbols: {[m.get('symbol') for m in usdt_futures[:5]]}")
         return usdt_futures
 
     def fetch_ticker(self, symbol: str) -> Dict[str, Any]:

@@ -263,6 +263,23 @@ class TradingBot:
         symbol = signal['symbol']
         direction = signal['direction']
         
+        logger.info(f"Signal: {direction} on {symbol} @ {signal.get('entry_price')} (Paper mode - no trade executed)")
+        
+        if config.is_paper_mode:
+            logger.info(f"[PAPER] Would trade: {direction} {symbol} amount={risk_manager.calculate_position_size(symbol, direction)}")
+            self._active_trades[symbol] = {
+                'direction': direction,
+                'entry_price': signal.get('entry_price'),
+                'amount': risk_manager.calculate_position_size(symbol, direction),
+                'sl_price': signal.get('entry_price', 0) * 0.98,
+                'tp1_price': signal.get('entry_price', 0) * 1.03,
+                'tp2_price': signal.get('entry_price', 0) * 1.05,
+                'tp1_filled': False,
+                'tp2_filled': False,
+                'created_at': datetime.now(),
+            }
+            return
+        
         logger.info(f"Executing {direction} trade on {symbol}...")
         
         amount = risk_manager.calculate_position_size(symbol, direction)
