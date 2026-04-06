@@ -74,10 +74,13 @@ class BinanceClient:
 
     def fetch_markets(self) -> List[Dict[str, Any]]:
         markets = self.exchange.load_markets()
-        usdt_futures = [
-            m for m in markets.values()
-            if (m.get('quote') == 'USDT' or m.get('quote') == 'USD') and m.get('type') == 'future'
-        ]
+        usdt_futures = []
+        for m in markets.values():
+            if (m.get('quote') == 'USDT' or m.get('quote') == 'USD') and m.get('type') == 'future':
+                symbol_part = m.get('symbol', '').split(':')[-1] if ':' in m.get('symbol', '') else ''
+                if not any(c.isdigit() for c in symbol_part[:4] if len(symbol_part) >= 4):
+                    usdt_futures.append(m)
+        
         logger.info(f"[DEBUG] Total markets: {len(markets)}, USDT futures: {len(usdt_futures)}")
         return usdt_futures
 
