@@ -1,0 +1,27 @@
+binance:
+  api_key: ""          # Fill for live mode
+  api_secret: ""       # Fill for live mode
+  testnet: true        # true = testnet, false = live
+
+trading:
+  mode: paper          # paper or live
+  leverage: 10          # 1-125x
+  entry_percent: 1.0   # % of balance per trade
+  stop_loss_percent: 2.0
+  take_profit_percent: 3.0
+  tp2_percent: 5.0    # Second TP level
+  trailing_stop_percent: 1.5
+  max_positions: 5
+  cooldown_minutes: 15
+  entry_offset_percent: 0.2    # Entry offset from support/resistance
+  entry_timeout_seconds: 30
+
+scanning:
+  interval_seconds: 300      # 5 minutes
+  min_volume_usdt: 100000   # Minimum volume filter
+  ohlcv_limit: 200          # Candles for analysis
+  timeframe: 1h             # 1m, 5m, 15m, 1h, 4h
+
+risk:
+  max_daily_loss_percent: 5.0
+  max_consecutive_losses: 3

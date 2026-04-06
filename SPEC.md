@@ -23,14 +23,14 @@ ADR = (Yüksek - Düşük) / Kapanış * 100 (günlük hareket aralığı)
 VolScore = Hacim / Ortalama Hacim oranı
 Momentum = Son 5 mumun toplam yönü (+=long, -=short)
 Trend = 50 EMA vs 200 EMA pozisyonu
+OB_Imbalance = (Bid_Volume - Ask_Volume) / (Bid_Volume + Ask_Volume)
 
-Score = (RSI_Uygunluk * 0.25) + (ADR * 0.20) + (VolScore * 0.20) + (Momentum * 0.20) + (Trend * 0.15)
+Score = (RSI_Uygunluk * 0.20) + (ADR * 0.15) + (VolScore * 0.15) + (Momentum * 0.15) + (Trend * 0.15) + (OB_Imbalance * 0.20)
 ```
 - RSI oversold (<35) = +puan (long için)
 - RSI overbought (>65) = +puan (short için)
-- Yüksek ADR = volatilite bonus
-- Yüksek hacim = likidite bonus
-- Trend uyumu = yön bonus
+- OB Imbalance > 0.2 (bid ağırlıklı) = +puan long
+- OB Imbalance < -0.2 (ask ağırlıklı) = +puan short
 
 ### 3. Sinyal Üretimi
 - En yüksek scoreları alan 5 koin seçilir
@@ -47,11 +47,22 @@ Score = (RSI_Uygunluk * 0.25) + (ADR * 0.20) + (VolScore * 0.20) + (Momentum * 0
 - **Max Açık Pozisyon:** 5 koin (simultaneous)
 - **Cooldown:** Her işlem sonrası 15 dakika bekleme
 
-### 5. Emir Yönetimi
-- **Entry:** MARKET emir (ani giriş için)
-- **TP:** LIMIT emir (ayak kısmi: %50 @ %3, %50 @ @5)
-- **SL:** STOP-LOSS MARKET emir (@ %2 fiyat)
-- **Trailing:** Otomatik güncelleme her mumda
+### 5. Emir Yönetimi (VWAP + Orderbook)
+- **Entry:** LIMIT emir, orderbook derinliğine göre:
+  - Orderbook'tan bid/ask fiyatları çekilir
+  - VWAP hesaplanır (son 100 mumun hacim ağırlıklı ortalaması)
+  - Destek (long için VWAP altı) / Direnç (short için VWAP üstü) seviyeleri belirlenir
+  - Entry: Destek/direnç seviyesinden %0.2 offset ile limit emir
+  - Fiyat 30 saniye içinde girmezse market emir ile gir
+- **TP:** LIMIT emir, VWAP bazlı:
+  - Long: TP = VWAP * 1.03, TP2 = VWAP * 1.05
+  - Short: TP = VWAP * 0.97, TP2 = VWAP * 0.95
+  - Kısmi: %50 TP1, %50 TP2
+- **SL:** STOP-LIMIT emir:
+  - Long: SL = Entry * 0.98
+  - Short: SL = Entry * 1.02
+- **Trailing:** Her mumda VWAP güncellenir, SL VWAP'a göre çekilir
+- **Margin:** Cross margin + Hedge mod (her yön için ayrı pozisyon açılabilir)
 
 ### 6. Modlar
 | Mod | Açıklama | Emir Gönderimi |
@@ -157,5 +168,5 @@ python main.py --mode live
 
 - Stop-limit yerine stop-market kullanılır (daha güvenilir)
 - Futures USDT-M kontratları hedeflenir
-- Cross margin yerine isolated margin kullanılır (her pozisyon ayrı)
+- Cross margin + Hedge mod (aynı koin için hem long hem short açılabilir)
 - Saat dilimi: UTC (Binance UTC kullanır)
