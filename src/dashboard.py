@@ -182,11 +182,13 @@ HTML_TEMPLATE = """
                         <tr>
                             <th>Koin</th>
                             <th>Yön</th>
-                            <th>Fiyat</th>
+                            <th>Entry</th>
+                            <th>VWAP</th>
+                            <th>TP1</th>
+                            <th>TP2</th>
+                            <th>SL</th>
                             <th>RSI</th>
                             <th>Score</th>
-                            <th>OB</th>
-                            <th>İşlem</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -197,14 +199,12 @@ HTML_TEMPLATE = """
                                 {{ sig.direction }}
                             </td>
                             <td>{{ "%.4f"|format(sig.entry_price) }}</td>
+                            <td>{{ "%.4f"|format(sig.vwap) }}</td>
+                            <td class="green">{{ "%.4f"|format(sig.entry_price * 1.03) }}</td>
+                            <td class="green">{{ "%.4f"|format(sig.entry_price * 1.05) }}</td>
+                            <td class="red">{{ "%.4f"|format(sig.entry_price * 0.98) }}</td>
                             <td>{{ "%.1f"|format(sig.rsi) }}</td>
                             <td class="score">{{ "%.1f"|format(sig.score) }}</td>
-                            <td>{{ "%.2f"|format(sig.ob_imbalance*100) }}%</td>
-                            <td>
-                                <button class="btn btn-primary" onclick="openPosition('{{sig.symbol}}', '{{sig.direction}}')">
-                                    Aç
-                                </button>
-                            </td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -227,10 +227,12 @@ HTML_TEMPLATE = """
                         <tr>
                             <th>Koin</th>
                             <th>Yön</th>
-                            <th>Giriş</th>
+                            <th>Entry</th>
+                            <th>TP1</th>
+                            <th>TP2</th>
+                            <th>SL</th>
                             <th>Güncel</th>
                             <th>PnL</th>
-                            <th>SL</th>
                             <th>İşlem</th>
                         </tr>
                     </thead>
@@ -242,11 +244,13 @@ HTML_TEMPLATE = """
                                 {{ pos.direction }}
                             </td>
                             <td>{{ "%.4f"|format(pos.entry_price) }}</td>
+                            <td class="green">{{ "%.4f"|format(pos.tp1_price) if pos.tp1_price else '-' }}</td>
+                            <td class="green">{{ "%.4f"|format(pos.tp2_price) if pos.tp2_price else '-' }}</td>
+                            <td class="red">{{ "%.4f"|format(pos.sl_price) }}</td>
                             <td>{{ "%.4f"|format(pos.current_price) if pos.current_price else '-' }}</td>
                             <td class="{{'green' if pos.pnl>=0 else 'red'}}">
                                 {{ "%.2f"|format(pos.pnl) }}%
                             </td>
-                            <td>{{ "%.4f"|format(pos.sl_price) }}</td>
                             <td>
                                 <button class="btn btn-danger" onclick="closePosition('{{sym}}')">Kapat</button>
                             </td>
