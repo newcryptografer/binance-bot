@@ -184,7 +184,11 @@ class BinanceClient:
         )
 
     def set_leverage(self, symbol: str, leverage: int) -> Dict[str, Any]:
-        return self.exchange.set_leverage(symbol, leverage)
+        self._ensure_exchange()
+        if self.is_testnet:
+            logger.info(f"[TESTNET] Leverage would be set to {leverage}x for {symbol}")
+            return {'leverage': leverage, 'symbol': symbol}
+        return self.exchange.set_leverage(symbol, int(leverage))
 
     def cancel_order(self, order_id: str, symbol: str) -> Dict[str, Any]:
         return self.exchange.cancel_order(order_id, symbol)
