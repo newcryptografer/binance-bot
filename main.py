@@ -488,6 +488,8 @@ def parse_args():
                         help='Trading mode: paper (test) or live (real)')
     parser.add_argument('--config', default='config.yaml',
                         help='Path to config file')
+    parser.add_argument('--no-dashboard', action='store_true',
+                        help='Disable web dashboard')
     return parser.parse_args()
 
 
@@ -508,9 +510,10 @@ def main():
     bot = TradingBot()
     bot_instance = bot
     
-    dashboard = DashboardServer(bot)
-    dashboard.start()
-    logger.info(f"Dashboard: http://localhost:5000")
+    if not args.no_dashboard:
+        dashboard = DashboardServer(bot)
+        dashboard.start()
+        logger.info(f"Dashboard: http://localhost:5000")
     
     bot.start()
 
