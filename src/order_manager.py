@@ -6,6 +6,19 @@ from src.config import config
 import time
 
 
+def calculate_vwap(ohlcv_data: List[List[float]]) -> float:
+    if not ohlcv_data or len(ohlcv_data) < 2:
+        return 0.0
+    volume_sum = 0.0
+    price_vol_sum = 0.0
+    for candle in ohlcv_data:
+        typical_price = (candle[2] + candle[1] + candle[4]) / 3
+        vol = candle[5]
+        price_vol_sum += typical_price * vol
+        volume_sum += vol
+    return price_vol_sum / volume_sum if volume_sum > 0 else 0.0
+
+
 class OrderManager:
     def __init__(self):
         self.leverage = int(config.trading.get('leverage', 10))
@@ -28,8 +41,15 @@ class OrderManager:
                                          vwap: float, current_price: float) -> Dict[str, Any]:
         ob_data = binance_client.get_liquidity_zones(symbol, current_price)
         
+        # Fetch 1d timeframe VWAP for TP levels
+        try:
+            ohlcv_1d = binance_client.fetch_ohlcv(symbol, '1d', 30)
+            vwap_1d = calculate_vwap(ohlcv_1d) if ohlcv_1d else vwap
+        except:
+            vwap_1d = vwap
+        
         if direction == 'LONG':
-            # Entry: VWAP destek + Orderbook birleşimi
+            # Entry: VWAP (1h) destek + Orderbook birleşimi
             entry_price = ob_data.get('entry_bid', current_price * 0.998)
             if entry_price > current_price * 0.999:
                 entry_price = current_price * 0.999
@@ -40,21 +60,21 @@ class OrderManager:
             # SL: Entry'nin altı (%2)
             sl = entry_price * (1 - self.sl_percent / 100)
             
-            # TP1: VWAP direnç + Orderbook (%3)
-            vwap_r1 = vwap * 1.03
+            # TP1: 1d VWAP direnç + Orderbook (%3)
+            vwap_r1 = vwap_1d * 1.03
             ob_r1 = ob_data.get('strong_ask', current_price * 1.03)
             tp1 = min(vwap_r1, ob_r1)
             
-            # TP2: VWAP üstü + Orderbook (%5)
-            vwap_r2 = vwap * 1.05
+            # TP2: 1d VWAP üstü + Orderbook (%5)
+            vwap_r2 = vwap_1d * 1.05
             ob_r2 = ob_data.get('strong_ask', current_price * 1.05) * 1.02
             tp2 = min(vwap_r2, ob_r2)
             
-            entry_reason = f"Entry: {entry_price:.4f} (VWAP:{vwap:.4f} + OB)"
-            tp1_reason = f"TP1: {tp1:.4f} (VWAP:{vwap*1.03:.4f} + OB)"
-            tp2_reason = f"TP2: {tp2:.4f} (VWAP:{vwap*1.05:.4f} + OB)"
+            entry_reason = f"Entry: {entry_price:.4f} (1h VWAP:{vwap:.4f} + OB)"
+            tp1_reason = f"TP1: {tp1:.4f} (1d VWAP:{vwap_1d*1.03:.4f} + OB)"
+            tp2_reason = f"TP2: {tp2:.4f} (1d VWAP:{vwap_1d*1.05:.4f} + OB)"
         else:
-            # Entry: VWAP direnç + Orderbook
+            # Entry: VWAP (1h) direnç + Orderbook
             entry_price = ob_data.get('entry_ask', current_price * 1.002)
             if entry_price < current_price * 1.001:
                 entry_price = current_price * 1.001
@@ -65,19 +85,19 @@ class OrderManager:
             # SL: Entry'nin üstü (%2)
             sl = entry_price * (1 + self.sl_percent / 100)
             
-            # TP1: VWAP destek + Orderbook (%3)
-            vwap_s1 = vwap * 0.97
+            # TP1: 1d VWAP destek + Orderbook (%3)
+            vwap_s1 = vwap_1d * 0.97
             ob_s1 = ob_data.get('strong_bid', current_price * 0.97)
             tp1 = max(vwap_s1, ob_s1)
             
-            # TP2: VWAP altı + Orderbook (%5)
-            vwap_s2 = vwap * 0.95
+            # TP2: 1d VWAP altı + Orderbook (%5)
+            vwap_s2 = vwap_1d * 0.95
             ob_s2 = ob_data.get('strong_bid', current_price * 0.95) * 0.98
             tp2 = max(vwap_s2, ob_s2)
             
-            entry_reason = f"Entry: {entry_price:.4f} (VWAP:{vwap:.4f} + OB)"
-            tp1_reason = f"TP1: {tp1:.4f} (VWAP:{vwap*0.97:.4f} + OB)"
-            tp2_reason = f"TP2: {tp2:.4f} (VWAP:{vwap*0.95:.4f} + OB)"
+            entry_reason = f"Entry: {entry_price:.4f} (1h VWAP:{vwap:.4f} + OB)"
+            tp1_reason = f"TP1: {tp1:.4f} (1d VWAP:{vwap_1d*0.97:.4f} + OB)"
+            tp2_reason = f"TP2: {tp2:.4f} (1d VWAP:{vwap_1d*0.95:.4f} + OB)"
 
         precision = self._get_price_precision(symbol)
         
@@ -93,6 +113,7 @@ class OrderManager:
             'tp1_reason': tp1_reason,
             'tp2_reason': tp2_reason,
             'vwap': vwap,
+            'vwap_1d': vwap_1d,
         }
 
     def calculate_tp_prices(self, entry_price: float, direction: str) -> tuple:
