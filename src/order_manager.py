@@ -62,7 +62,6 @@ class OrderManager:
         
         if direction == 'LONG':
             # Entry: Fiyat 15m VWAP destek seviyesine gelince gir
-            # Price must reach VWAP support before entry
             vwap_support = min(vwap_15m, ob_data.get('strong_bid', vwap_15m * 0.99))
             
             # Fiyat VWAP destek seviyesinde veya altında olmalı
@@ -72,51 +71,49 @@ class OrderManager:
             
             entry_price = current_price  # Market fiyatından gir
             
-            # SL: VWAP direnç ÜSTÜ ( LONG için SL yukarıda)
-            vwap_resistance = max(vwap_15m, ob_data.get('strong_ask', vwap_15m * 1.01))
-            sl = max(entry_price * (1 + self.sl_percent / 100), vwap_resistance)
+            # SL: VWAP destek ALTINDA (LONG için SL aşağıda - kaybettiğimiz yer)
+            sl = min(entry_price * (1 - self.sl_percent / 100), vwap_support)
             
-            # TP1: 4h VWAP direnç + Orderbook
-            vwap_r1 = vwap_4h * 1.03
+            # TP1: 15m VWAP direnç (ilk hedef)
+            vwap_r1 = vwap_15m * 1.03
             ob_r1 = ob_data.get('strong_ask', current_price * 1.03)
             tp1 = min(vwap_r1, ob_r1)
             
-            # TP2: 1d VWAP üstü + Orderbook
-            vwap_r2 = vwap_1d * 1.05
+            # TP2: 4h VWAP üstü (ikinci hedef - direnç kırılırsa)
+            vwap_r2 = vwap_4h * 1.05
             ob_r2 = ob_data.get('strong_ask', current_price * 1.05) * 1.02
             tp2 = min(vwap_r2, ob_r2)
             
             entry_reason = f"Entry: {entry_price:.4f} (VWAP support:{vwap_support:.4f})"
-            tp1_reason = f"TP1: {tp1:.4f} (4h VWAP:{vwap_4h*1.03:.4f})"
-            tp2_reason = f"TP2: {tp2:.4f} (1d VWAP:{vwap_1d*1.05:.4f})"
+            tp1_reason = f"TP1: {tp1:.4f} (15m VWAP:{vwap_15m*1.03:.4f})"
+            tp2_reason = f"TP2: {tp2:.4f} (4h VWAP:{vwap_4h*1.05:.4f})"
         else:
             # Entry: Fiyat 15m VWAP direnç seviyesine gelince gir
-            # Price must reach VWAP resistance before entry
             vwap_resistance = max(vwap_15m, ob_data.get('strong_ask', vwap_15m * 1.01))
             
-            # Fiyat VWAP direnç seviyesinde veya altında olmalı (yani direnci kırmış olmalı)
+            # Fiyat VWAP direnç seviyesinde veya üstünde olmalı (direnci kırmış olmalı)
             if current_price < vwap_resistance:
                 logger.info(f"SHORT waiting: price {current_price} below VWAP resistance {vwap_resistance}")
                 return None
             
             entry_price = current_price  # Market fiyatından gir
             
-            # SL: VWAP destek ALTINDA ( SHORT için SL aşağıda)
-            vwap_support = min(vwap_15m, ob_data.get('strong_bid', vwap_15m * 0.99))
-            sl = min(entry_price * (1 - self.sl_percent / 100), vwap_support)
+            # SL: VWAP direnç ÜSTÜNDE (SHORT için SL yukarıda - kaybettiğimiz yer)
+            sl = max(entry_price * (1 + self.sl_percent / 100), vwap_resistance)
             
-            # TP1: 4h VWAP destek + Orderbook
-            vwap_s1 = vwap_4h * 0.97
+            # TP1: 15m VWAP destek (ilk hedef)
+            vwap_s1 = vwap_15m * 0.97
             ob_s1 = ob_data.get('strong_bid', current_price * 0.97)
             tp1 = max(vwap_s1, ob_s1)
             
-            # TP2: 1d VWAP altı + Orderbook
-            vwap_s2 = vwap_1d * 0.95
+            # TP2: 4h VWAP altı (ikinci hedef - destek kırılırsa)
+            vwap_s2 = vwap_4h * 0.95
             ob_s2 = ob_data.get('strong_bid', current_price * 0.95) * 0.98
             tp2 = max(vwap_s2, ob_s2)
             
             entry_reason = f"Entry: {entry_price:.4f} (VWAP resistance:{vwap_resistance:.4f})"
-            tp1_reason = f"TP1: {tp1:.4f} (4h VWAP:{vwap_4h*0.97:.4f})"
+            tp1_reason = f"TP1: {tp1:.4f} (15m VWAP:{vwap_15m*0.97:.4f})"
+            tp2_reason = f"TP2: {tp2:.4f} (4h VWAP:{vwap_4h*0.95:.4f})"
             tp2_reason = f"TP2: {tp2:.4f} (1d VWAP:{vwap_1d*0.95:.4f})"
 
         precision = self._get_price_precision(symbol)
