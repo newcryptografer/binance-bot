@@ -458,6 +458,7 @@ class TradingBot:
             if symbol in closed_symbols:
                 risk_manager.record_trade(pnl)
                 logger.info(f"[PAPER] Position closed: {symbol}, PnL: {pnl:.2f} USDT")
+                binance_client.update_balance(pnl)
                 self._trade_history.append({
                     'symbol': symbol,
                     'direction': trade['direction'],
