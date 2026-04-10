@@ -1,335 +1,333 @@
-import ccxt
+import os
 import json
-import threading
 import time
+import threading
+import logging
 import websocket
-from typing import Dict, Any, List, Optional, Tuple, Callable
-from datetime import datetime
+from typing import Dict, Any, List, Optional
+
+try:
+    from binance.futures import Futures
+except ImportError:
+    print("Warning: binance-futures-connector not installed")
+
 from src.config import config
-from src.logger import logger
+
+
+logger = logging.getLogger(__name__)
 
 
 class BinanceClient:
     def __init__(self):
-        self._exchange: Optional[ccxt.binance] = None
+        self._client: Optional[Futures] = None
+        self._ws: Optional[websocket.WebSocketApp] = None
+        self._ws_thread: Optional[threading.Thread] = None
+        self._price_cache: Dict[str, Dict] = {}
+        self._running = False
+        self._init_client()
     
-    def _ensure_exchange(self) -> None:
-        if self._exchange is not None:
-            return
-        
+    def _init_client(self):
         api_key = config.binance.get('api_key', '')
         api_secret = config.binance.get('api_secret', '')
-        
-        print(f"[DEBUG] _ensure_exchange: api_key='{api_key}', api_secret='{api_secret}'")
-        
-        exchange_opts = {
-            'enableRateLimit': True,
-            'options': {
-                'defaultType': 'future',
-                'adjustForTimeDifference': True,
-                'hedged': True,
-            }
-        }
         
         if not api_key or not api_secret:
-            logger.warning("API key/secret not provided - falling back to testnet")
-            self._exchange = ccxt.binance({
-                'urls': {
-                    'api': {
-                        'public': 'https://testnet.binancefuture.com',
-                        'private': 'https://testnet.binancefuture.com',
-                    }
-                },
-                **exchange_opts
-            })
-            logger.info("Binance Testnet mode initialized (Hedge Mode)")
+            logger.warning("No API credentials - using public endpoints")
+            self._client = Futures(base_url="https://fapi.binance.com")
         else:
-            self._exchange = ccxt.binance({
-                'apiKey': api_key,
-                'secret': api_secret,
-                'enableRateLimit': True,
-                'options': {
-                    'defaultType': 'future',
-                    'adjustForTimeDifference': True,
-                    'hedged': True,
-                }
-            })
-            logger.info("Binance Live exchange initialized for market data")
-
-    @property
-    def is_testnet(self) -> bool:
-        self._ensure_exchange()
-        return self._exchange is not None and 'testnet' in str(self._exchange.urls.get('api', {}).get('private', ''))
+            self._client = Futures(
+                key=api_key,
+                secret=api_secret,
+                base_url="https://fapi.binance.com"
+            )
+            logger.info("Binance client initialized")
     
     @property
-    def has_credentials(self) -> bool:
-        api_key = config.binance.get('api_key', '')
-        api_secret = config.binance.get('api_secret', '')
-        return bool(api_key and api_secret)
-
+    def client(self) -> Futures:
+        if self._client is None:
+            self._init_client()
+        return self._client
+    
     @property
-    def exchange(self) -> ccxt.binance:
-        self._ensure_exchange()
-        return self._exchange
-
-    def fetch_markets(self) -> List[Dict[str, Any]]:
-        markets = self.exchange.load_markets()
-        usdt_futures = []
-        for m in markets.values():
-            symbol = m.get('symbol', '')
-            # Perpetual: ends with :USDT (no date)
-            # Dated: ends with :USDT-260626
-            if symbol.endswith(':USDT'):
-                usdt_futures.append(m)
-        
-        logger.info(f"[DEBUG] Total markets: {len(markets)}, USDT futures: {len(usdt_futures)}")
-        print(f"[DEBUG] Sample: {[m.get('symbol') for m in usdt_futures[:10]]}")
-        return usdt_futures
-
-    def fetch_ticker(self, symbol: str) -> Dict[str, Any]:
-        return self.exchange.fetch_ticker(symbol)
-
-    def fetch_ohlcv(self, symbol: str, timeframe: str = '1h', limit: int = 200) -> List[List[float]]:
-        return self.exchange.fetch_ohlcv(symbol, timeframe, limit=limit)
-
-    def fetch_order_book(self, symbol: str, limit: int = 20) -> Dict[str, Any]:
-        return self.exchange.fetch_order_book(symbol, limit)
-
-    def fetch_l2_order_book(self, symbol: str, depth: int = 50) -> Dict[str, Any]:
-        ob = self.exchange.fetch_order_book(symbol, depth)
-        
-        bid_volume = sum([float(b[1]) for b in ob.get('bids', [])[:10]])
-        ask_volume = sum([float(a[1]) for a in ob.get('asks', [])[:10]])
-        
-        ob['bid_volume'] = bid_volume
-        ob['ask_volume'] = ask_volume
-        ob['imbalance'] = (bid_volume - ask_volume) / (bid_volume + ask_volume) if (bid_volume + ask_volume) > 0 else 0
-        
-        return ob
-
-    def get_orderbook_levels(self, symbol: str, levels: int = 10) -> Dict[str, Any]:
-        ob = self.fetch_order_book(symbol, levels)
+    def is_paper(self) -> bool:
+        return config.trading.get('mode', 'paper') == 'paper'
+    
+    def get_markets(self) -> List[Dict[str, Any]]:
+        try:
+            resp = self.client.exchange_info()
+            markets = [m for m in resp.get('symbols', []) 
+                      if m.get('quoteAsset') == 'USDT' 
+                      and m.get('contractType') == 'PERPETUAL'
+                      and m.get('status') == 'TRADING']
+            return markets
+        except Exception as e:
+            logger.error(f"Error fetching markets: {e}")
+            return []
+    
+    def get_klines(self, symbol: str, interval: str = "1h", limit: int = 200) -> List[List[float]]:
+        try:
+            resp = self.client.klines(symbol=symbol, interval=interval, limit=limit)
+            return [[float(x) for x in r[:6]] for r in resp]
+        except Exception as e:
+            logger.error(f"Error fetching klines for {symbol}: {e}")
+            return []
+    
+    def get_ticker(self, symbol: str) -> Dict[str, Any]:
+        try:
+            resp = self.client.ticker_24h(symbol=symbol)
+            return {
+                'last': float(resp.get('lastPrice', 0)),
+                'high': float(resp.get('highPrice', 0)),
+                'low': float(resp.get('lowPrice', 0)),
+                'volume': float(resp.get('volume', 0)),
+                'quoteVolume': float(resp.get('quoteVolume', 0)),
+            }
+        except Exception as e:
+            logger.error(f"Error fetching ticker for {symbol}: {e}")
+            return {}
+    
+    def get_orderbook_levels(self, symbol: str, levels: int = 20) -> Dict[str, Any]:
+        try:
+            depth = self.client.depth(symbol=symbol, limit=levels)
+            bids = [[float(b[0]), float(b[1])] for b in depth.get('bids', [])]
+            asks = [[float(a[0]), float(a[1])] for a in depth.get('asks', [])]
+            
+            bid_prices = [b[0] for b in bids]
+            ask_prices = [a[0] for a in asks]
+            bid_vols = [b[1] for b in bids]
+            ask_vols = [a[1] for a in asks]
+            
+            total_bid = sum(bid_vols)
+            total_ask = sum(ask_vols)
+            
+            bids_by_vol = sorted(bids, key=lambda x: x[1], reverse=True)
+            asks_by_vol = sorted(asks, key=lambda x: x[1], reverse=True)
+            
+            best_bid = bid_prices[0] if bid_prices else 0
+            best_ask = ask_prices[0] if ask_prices else 0
+            
+            return {
+                'best_bid': best_bid,
+                'best_ask': best_ask,
+                'mid_price': (best_bid + best_ask) / 2,
+                'total_bid_volume': total_bid,
+                'total_ask_volume': total_ask,
+                'bid_ask_ratio': total_bid / total_ask if total_ask > 0 else 1,
+                'bids': [{'price': b[0], 'volume': b[1]} for b in bids],
+                'asks': [{'price': a[0], 'volume': a[1]} for a in asks],
+                'bids_by_vol': [{'price': b[0], 'volume': b[1]} for b in bids_by_vol[:5]],
+                'asks_by_vol': [{'price': a[0], 'volume': a[1]} for a in asks_by_vol[:5]],
+                'imbalance': (total_bid - total_ask) / (total_bid + total_ask) if (total_bid + total_ask) > 0 else 0,
+            }
+        except Exception as e:
+            logger.error(f"Error fetching orderbook for {symbol}: {e}")
+            return {'bids': [], 'asks': [], 'bids_by_vol': [], 'asks_by_vol': []}
+    
+    def get_liquidity_zones(self, symbol: str, current_price: float) -> Dict[str, Any]:
+        ob = self.get_orderbook_levels(symbol, 20)
         
         bids = ob.get('bids', [])
         asks = ob.get('asks', [])
+        total_bid = ob.get('total_bid_volume', 0)
+        total_ask = ob.get('total_ask_volume', 0)
         
-        bid_prices = [float(b[0]) for b in bids]
-        ask_prices = [float(a[0]) for a in asks]
-        
-        bid_volumes = [float(b[1]) for b in bids]
-        ask_volumes = [float(a[1]) for a in asks]
-        
-        max_bid_volume_idx = bid_volumes.index(max(bid_volumes)) if bid_volumes else 0
-        max_ask_volume_idx = ask_volumes.index(max(ask_volumes)) if ask_volumes else 0
-        
-        best_bid = bid_prices[0] if bid_prices else 0
-        best_ask = ask_prices[0] if ask_prices else 0
-        mid_price = (best_bid + best_ask) / 2
-        
-        return {
-            'best_bid': best_bid,
-            'best_ask': best_ask,
-            'mid_price': mid_price,
-            'spread': best_ask - best_bid if best_ask and best_bid else 0,
-            'spread_percent': ((best_ask - best_bid) / mid_price * 100) if mid_price > 0 else 0,
-            'max_bid_level_price': bid_prices[max_bid_volume_idx] if bid_prices else 0,
-            'max_ask_level_price': ask_prices[max_ask_volume_idx] if ask_prices else 0,
-            'total_bid_volume': sum(bid_volumes),
-            'total_ask_volume': sum(ask_volumes),
-            'bid_ask_ratio': sum(bid_volumes) / sum(ask_volumes) if sum(ask_volumes) > 0 else 1,
-            'bids': [{'price': p, 'volume': v} for p, v in bids],
-            'asks': [{'price': p, 'volume': v} for p, v in asks],
-        }
-
-    def get_liquidity_zones(self, symbol: str, current_price: float) -> Dict[str, Any]:
-        ob_levels = self.get_orderbook_levels(symbol, 20)
-        
-        bid_prices = [b['price'] for b in ob_levels['bids']]
-        ask_prices = [a['price'] for a in ob_levels['asks']]
-        
-        strong_bid_zone = None
-        strong_ask_zone = None
-        
-        for i, b in enumerate(ob_levels['bids'][:5]):
-            if b['volume'] > ob_levels['total_bid_volume'] * 0.3:
-                strong_bid_zone = b['price']
+        strong_bid = None
+        for b in bids[:5]:
+            if b['volume'] > total_bid * 0.3:
+                strong_bid = b['price']
                 break
         
-        for i, a in enumerate(ob_levels['asks'][:5]):
-            if a['volume'] > ob_levels['total_ask_volume'] * 0.3:
-                strong_ask_zone = a['price']
+        strong_ask = None
+        for a in asks[:5]:
+            if a['volume'] > total_ask * 0.3:
+                strong_ask = a['price']
                 break
         
         return {
-            'strong_bid': strong_bid_zone,
-            'strong_ask': strong_ask_zone,
-            'bid_volume': ob_levels['total_bid_volume'],
-            'ask_volume': ob_levels['total_ask_volume'],
-            'imbalance': ob_levels['imbalance'],
-            'entry_bid': strong_bid_zone if strong_bid_zone else current_price * 0.998,
-            'entry_ask': strong_ask_zone if strong_ask_zone else current_price * 1.002,
+            'strong_bid': strong_bid,
+            'strong_ask': strong_ask,
+            'imbalance': ob.get('imbalance', 0),
+            'bid_volume': total_bid,
+            'ask_volume': total_ask,
+            'bids': ob.get('bids', []),
+            'asks': ob.get('asks', []),
         }
-
-    def fetch_balance(self) -> Dict[str, Any]:
-        return self.exchange.fetch_balance({'type': 'future'})
-
-    def fetch_positions(self) -> List[Dict[str, Any]]:
-        positions = self.exchange.fetch_positions()
-        return [p for p in positions if float(p.get('contracts', 0)) > 0]
-
-    def fetch_open_orders(self, symbol: Optional[str] = None) -> List[Dict[str, Any]]:
-        return self.exchange.fetch_open_orders(symbol, params={'type': 'future'})
-
-    def create_order(self, symbol: str, side: str, order_type: str, 
-                     amount: float, price: Optional[float] = None,
-                     params: Optional[Dict] = None) -> Dict[str, Any]:
-        order_params = {'type': 'future', 'marginMode': 'cross'}
-        if params:
-            order_params.update(params)
-        
-        return self.exchange.create_order(
-            symbol, order_type, side, amount, price, order_params
-        )
-
-    def set_leverage(self, symbol: str, leverage: int) -> Dict[str, Any]:
-        try:
-            self._ensure_exchange()
-            if self.is_testnet:
-                logger.info(f"[TESTNET] Leverage {leverage}x for {symbol}")
-                return {'leverage': leverage, 'symbol': symbol}
-            return self.exchange.set_leverage(symbol, leverage)
-        except Exception as e:
-            logger.warning(f"Leverage skipped: {e}")
-            return {'leverage': leverage, 'symbol': symbol}
-
-    def cancel_order(self, order_id: str, symbol: str) -> Dict[str, Any]:
-        return self.exchange.cancel_order(order_id, symbol)
-
-    def cancel_all_orders(self, symbol: str) -> List[Dict[str, Any]]:
-        return self.exchange.cancel_all_orders(symbol, params={'type': 'future'})
-
-    def get_wallet_balance(self) -> float:
-        balance = self.fetch_balance()
-        return float(balance.get('USDT', {}).get('free', 0))
-
-    def get_total_balance(self) -> float:
-        balance = self.fetch_balance()
-        return float(balance.get('USDT', {}).get('total', 0))
-
-    def fetch_funding_rate(self, symbol: str) -> Optional[float]:
-        try:
-            funding = self.exchange.fetch_funding_rate(symbol)
-            return funding.get('fundingRate')
-        except Exception:
-            return None
-
-    def fetch_open_interest(self, symbol: str) -> Optional[Dict[str, Any]]:
-        try:
-            oi = self.exchange.fetch_open_interest(symbol)
-            return oi
-        except Exception:
-            return None
-
-
-class BinanceWebSocket:
-    def __init__(self):
-        self._ws: Optional[websocket.WebSocketApp] = None
-        self._running = False
-        self._thread: Optional[threading.Thread] = None
-        self._subscribers: Dict[str, List[Callable]] = {}
-        self._price_cache: Dict[str, Dict] = {}
-        
-        self._base_url = "wss://stream.binancefuture.com/ws"
-        
-    def connect(self):
-        if self._running:
-            return
-        
-        self._running = True
-        self._thread = threading.Thread(target=self._run_ws, daemon=True)
-        self._thread.start()
-        logger.info("WebSocket connected")
     
-    def _run_ws(self):
+    def get_balance(self) -> float:
+        try:
+            account = self.client.account()
+            for balance in account.get('assets', []):
+                if balance.get('asset') == 'USDT':
+                    return float(balance.get('availableBalance', 0))
+            return 0
+        except Exception as e:
+            logger.error(f"Error fetching balance: {e}")
+            return 0
+    
+    def set_leverage(self, symbol: str, leverage: int) -> bool:
+        if self.is_paper:
+            logger.info(f"[PAPER] Set leverage {leverage}x for {symbol}")
+            return True
+        try:
+            self.client.position_side_dual(True)
+            self.client.leverage(symbol=symbol, leverage=leverage)
+            return True
+        except Exception as e:
+            logger.warning(f"Could not set leverage: {e}")
+            return True
+    
+    def place_order(self, symbol: str, side: str, order_type: str, 
+                   quantity: float, price: Optional[float] = None,
+                   position_side: str = "BOTH") -> Optional[Dict[str, Any]]:
+        if self.is_paper:
+            order_id = f"paper_{int(time.time()*1000)}"
+            logger.info(f"[PAPER] {side} {order_type} {symbol} qty={quantity} @ {price or 'market'}")
+            return {
+                'orderId': order_id,
+                'symbol': symbol,
+                'side': side,
+                'type': order_type,
+                'price': price,
+                'origQty': quantity,
+                'status': 'NEW'
+            }
+        
+        try:
+            params = {
+                'symbol': symbol,
+                'side': side,
+                'positionSide': position_side,
+            }
+            
+            if order_type == 'MARKET':
+                params['orderType'] = 'MARKET'
+                params['quantity'] = quantity
+            else:
+                params['orderType'] = 'LIMIT'
+                params['price'] = price
+                params['quantity'] = quantity
+                params['timeInForce'] = 'GTC'
+            
+            resp = self.client.new_order(**params)
+            return resp
+        except Exception as e:
+            logger.error(f"Error placing order: {e}")
+            return None
+    
+    def get_positions(self) -> List[Dict[str, Any]]:
+        try:
+            return self.client.positionRisk()
+        except Exception as e:
+            logger.error(f"Error fetching positions: {e}")
+            return []
+    
+    def cancel_order(self, symbol: str, order_id: str) -> bool:
+        if self.is_paper:
+            return True
+        try:
+            self.client.cancel(symbol=symbol, orderId=order_id)
+            return True
+        except Exception as e:
+            logger.error(f"Error canceling order: {e}")
+            return False
+    
+    def start_websocket(self):
+        self._running = True
+        self._ws_thread = threading.Thread(target=self._ws_loop, daemon=True)
+        self._ws_thread.start()
+    
+    def _ws_loop(self):
         while self._running:
             try:
+                ws_url = "wss://fstream.binance.com/ws"
                 self._ws = websocket.WebSocketApp(
-                    self._base_url,
+                    ws_url,
                     on_message=self._on_message,
-                    on_error=self._on_error,
-                    on_close=self._on_close,
+                    on_error=lambda ws, e: logger.error(f"WS error: {e}"),
+                    on_close=lambda ws, code, msg: logger.warning(f"WS closed: {code}"),
                     on_open=self._on_open
                 )
                 self._ws.run_forever(ping_interval=30)
             except Exception as e:
-                logger.error(f"WebSocket error: {e}")
-            
-            if self._running:
-                time.sleep(5)
+                logger.error(f"WS loop error: {e}")
+            time.sleep(5)
     
     def _on_open(self, ws):
-        logger.info("WebSocket connection opened")
-        subscribe_msg = {
-            "method": "SUBSCRIBE", 
-            "params": ["btcusdt@ticker", "ethusdt@ticker", "solusdt@ticker"],
-            "id": 1
-        }
-        ws.send(json.dumps(subscribe_msg))
+        ws.send(json.dumps({"method": "SUBSCRIBE", "params": ["!ticker@arr"], "id": 1}))
+        logger.info("WebSocket connected")
     
     def _on_message(self, ws, message):
         try:
             data = json.loads(message)
-            
-            if 'e' in data and data['e'] == '24hrTicker':
-                symbol = data['s']
-                self._price_cache[symbol] = {
-                    'price': float(data['c']),
-                    'high': float(data['h']),
-                    'low': float(data['l']),
-                    'volume': float(data['v']),
-                    'change': float(data['p']),
-                    'change_percent': float(data['P']),
-                }
-            elif isinstance(data, list):
-                for item in data:
-                    if 's' in item:
-                        symbol = item['s']
+            if isinstance(data, list):
+                for ticker in data:
+                    symbol = ticker.get('s')
+                    if symbol and symbol.endswith('USDT'):
                         self._price_cache[symbol] = {
-                            'price': float(item.get('c', 0)),
-                            'high': float(item.get('h', 0)),
-                            'low': float(item.get('l', 0)),
-                            'volume': float(item.get('v', 0)),
+                            'price': float(ticker.get('c', 0)),
+                            'volume': float(ticker.get('v', 0)),
                         }
-        except Exception as e:
-            logger.debug(f"WebSocket message error: {e}")
+        except:
+            pass
     
-    def _on_error(self, ws, error):
-        logger.error(f"WebSocket error: {error}")
-    
-    def _on_close(self, ws, close_status_code, close_msg):
-        logger.warning(f"WebSocket closed: {close_status_code}")
-    
-    def subscribe_markets(self, symbols: List[str], callback: Callable):
-        self._subscribers.setdefault("all_tickers", []).append(callback)
-        
-        if self._ws and self._running and symbols:
-            params = [f"{s.lower()}@ticker" for s in symbols[:50]]
-            msg = {"method": "SUBSCRIBE", "params": params, "id": int(time.time())}
-            self._ws.send(json.dumps(msg))
-    
-    def get_ticker_data(self, symbol: str) -> Optional[Dict]:
-        return self._price_cache.get(symbol)
-    
-    def get_all_prices(self) -> Dict[str, float]:
-        return {s: d.get('price', 0) for s, d in self._price_cache.items()}
-    
-    def disconnect(self):
+    def stop_websocket(self):
         self._running = False
         if self._ws:
             self._ws.close()
-        if self._thread:
-            self._thread.join(timeout=5)
+
+
+class BinanceWebSocket:
+    def __init__(self, client: BinanceClient):
+        self._client = client
+        self._ws: Optional[websocket.WebSocketApp] = None
+        self._thread: Optional[threading.Thread] = None
+        self._running = False
+        self._price_cache: Dict[str, Dict] = {}
+    
+    def connect(self):
+        self._running = True
+        self._thread = threading.Thread(target=self._run_loop, daemon=True)
+        self._thread.start()
+        logger.info("WebSocket connected")
+    
+    def _run_loop(self):
+        while self._running:
+            try:
+                ws_url = "wss://fstream.binance.com/stream?streams=!ticker@arr"
+                self._ws = websocket.WebSocketApp(
+                    ws_url,
+                    on_message=self._on_message,
+                    on_error=lambda ws, e: logger.error(f"WS error: {e}"),
+                    on_close=lambda ws, code, msg: logger.warning(f"WS closed: {code}"),
+                    on_open=lambda ws: ws.send(json.dumps({"method": "SUBSCRIBE", "params": ["!ticker@arr"], "id": 1}))
+                )
+                self._ws.run_forever(ping_interval=30)
+            except Exception as e:
+                logger.error(f"WS loop error: {e}")
+            time.sleep(5)
+    
+    def _on_message(self, ws, message):
+        try:
+            data = json.loads(message)
+            if isinstance(data, list):
+                for ticker in data:
+                    symbol = ticker.get('s')
+                    if symbol and symbol.endswith('USDT'):
+                        self._price_cache[symbol] = {
+                            'price': float(ticker.get('c', 0)),
+                            'volume': float(ticker.get('v', 0)),
+                        }
+        except:
+            pass
+    
+    def close(self):
+        self._running = False
+        if self._ws:
+            self._ws.close()
+    
+    @property
+    def prices(self) -> Dict[str, Dict]:
+        return self._price_cache
 
 
 binance_client = BinanceClient()
-binance_ws = BinanceWebSocket()
+binance_ws = BinanceWebSocket(binance_client)
