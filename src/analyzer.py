@@ -82,7 +82,7 @@ class TechnicalAnalyzer:
         self,
         entry_data: List[List[float]],
         trend_data: List[List[float]],
-        main_data: List[List[float]]]
+        main_data: List[List[float]]
     ) -> Dict[str, Any]:
         entry_df = self._prepare_dataframe(entry_data)
         trend_df = self._prepare_dataframe(trend_data)
