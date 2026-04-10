@@ -41,6 +41,15 @@ class OrderManager:
                                          vwap: float, current_price: float) -> Optional[Dict[str, Any]]:
         ob_data = binance_client.get_liquidity_zones(symbol, current_price)
         
+        def get_orderbook_zones(orders: list, total_vol: float, n: int = 3) -> list:
+            if not orders or total_vol == 0:
+                return []
+            sorted_orders = sorted(orders, key=lambda x: x.get('volume', 0), reverse=True)
+            return [{'price': o.get('price', 0), 'volume': o.get('volume', 0)} for o in sorted_orders[:n]]
+        
+        bid_zones = get_orderbook_zones(ob_data.get('bids', []), ob_data.get('total_bid_volume', 0), 3)
+        ask_zones = get_orderbook_zones(ob_data.get('asks', []), ob_data.get('total_ask_volume', 0), 3)
+        
         # Fetch different timeframe VWAPs
         try:
             ohlcv_15m = binance_client.fetch_ohlcv(symbol, '15m', 100)
@@ -74,19 +83,19 @@ class OrderManager:
             # SL: VWAP destek ALTINDA (LONG için SL aşağıda - kaybettiğimiz yer)
             sl = min(entry_price * (1 - self.sl_percent / 100), vwap_support)
             
-            # TP1: 15m VWAP direnç (ilk hedef)
-            vwap_r1 = vwap_15m * 1.03
-            ob_r1 = ob_data.get('strong_ask', current_price * 1.03)
-            tp1 = min(vwap_r1, ob_r1)
+            # TP1: Orderbook ASK ilk kalın bölge
+            tp1 = ask_zones[0]['price'] if ask_zones and len(ask_zones) > 0 else current_price * 1.03
             
-            # TP2: 4h VWAP üstü (ikinci hedef - direnç kırılırsa)
-            vwap_r2 = vwap_4h * 1.05
-            ob_r2 = ob_data.get('strong_ask', current_price * 1.05) * 1.02
-            tp2 = min(vwap_r2, ob_r2)
+            # TP2: Orderbook ASK ikinci kalın bölge
+            tp2 = ask_zones[1]['price'] if ask_zones and len(ask_zones) > 1 else current_price * 1.05
+            
+            # TP3: Orderbook ASK üçüncü kalın bölge veya 4h VWAP
+            tp3 = ask_zones[2]['price'] if ask_zones and len(ask_zones) > 2 else vwap_4h * 1.05
             
             entry_reason = f"Entry: {entry_price:.4f} (VWAP support:{vwap_support:.4f})"
-            tp1_reason = f"TP1: {tp1:.4f} (15m VWAP:{vwap_15m*1.03:.4f})"
-            tp2_reason = f"TP2: {tp2:.4f} (4h VWAP:{vwap_4h*1.05:.4f})"
+            tp1_reason = f"TP1: {tp1:.4f} (OB thick zone 1: {ask_zones[0].get('volume', 0):.0f} contracts)"
+            tp2_reason = f"TP2: {tp2:.4f} (OB thick zone 2: {ask_zones[1].get('volume', 0):.0f} contracts)"
+            tp3_reason = f"TP3: {tp3:.4f} (OB thick zone 3: {ask_zones[2].get('volume', 0):.0f} contracts)"
         else:
             # Entry: Fiyat 15m VWAP direnç seviyesine gelince gir
             vwap_resistance = max(vwap_15m, ob_data.get('strong_ask', vwap_15m * 1.01))
@@ -101,20 +110,19 @@ class OrderManager:
             # SL: VWAP direnç ÜSTÜNDE (SHORT için SL yukarıda - kaybettiğimiz yer)
             sl = max(entry_price * (1 + self.sl_percent / 100), vwap_resistance)
             
-            # TP1: 15m VWAP destek (ilk hedef)
-            vwap_s1 = vwap_15m * 0.97
-            ob_s1 = ob_data.get('strong_bid', current_price * 0.97)
-            tp1 = max(vwap_s1, ob_s1)
+            # TP1: Orderbook BID ilk kalın bölge
+            tp1 = bid_zones[0]['price'] if bid_zones and len(bid_zones) > 0 else current_price * 0.97
             
-            # TP2: 4h VWAP altı (ikinci hedef - destek kırılırsa)
-            vwap_s2 = vwap_4h * 0.95
-            ob_s2 = ob_data.get('strong_bid', current_price * 0.95) * 0.98
-            tp2 = max(vwap_s2, ob_s2)
+            # TP2: Orderbook BID ikinci kalın bölge
+            tp2 = bid_zones[1]['price'] if bid_zones and len(bid_zones) > 1 else current_price * 0.95
+            
+            # TP3: Orderbook BID üçüncü kalın bölge veya 4h VWAP
+            tp3 = bid_zones[2]['price'] if bid_zones and len(bid_zones) > 2 else vwap_4h * 0.95
             
             entry_reason = f"Entry: {entry_price:.4f} (VWAP resistance:{vwap_resistance:.4f})"
-            tp1_reason = f"TP1: {tp1:.4f} (15m VWAP:{vwap_15m*0.97:.4f})"
-            tp2_reason = f"TP2: {tp2:.4f} (4h VWAP:{vwap_4h*0.95:.4f})"
-            tp2_reason = f"TP2: {tp2:.4f} (1d VWAP:{vwap_1d*0.95:.4f})"
+            tp1_reason = f"TP1: {tp1:.4f} (OB thick zone 1: {bid_zones[0].get('volume', 0):.0f} contracts)"
+            tp2_reason = f"TP2: {tp2:.4f} (OB thick zone 2: {bid_zones[1].get('volume', 0):.0f} contracts)"
+            tp3_reason = f"TP3: {tp3:.4f} (OB thick zone 3: {bid_zones[2].get('volume', 0):.0f} contracts)"
 
         precision = self._get_price_precision(symbol)
         
@@ -122,6 +130,7 @@ class OrderManager:
             'entry_price': round(entry_price, precision),
             'tp1_price': round(tp1, precision),
             'tp2_price': round(tp2, precision),
+            'tp3_price': round(tp3, precision),
             'sl_price': round(sl, precision),
             'ob_imbalance': ob_data.get('imbalance', 0),
             'bid_volume': ob_data.get('bid_volume', 0),
@@ -129,9 +138,11 @@ class OrderManager:
             'entry_reason': entry_reason,
             'tp1_reason': tp1_reason,
             'tp2_reason': tp2_reason,
+            'tp3_reason': tp3_reason,
             'vwap': vwap_15m,
             'vwap_4h': vwap_4h,
             'vwap_1d': vwap_1d,
+            'ob_zones': {'bids': bid_zones, 'asks': ask_zones},
             'valid': True,
         }
 
