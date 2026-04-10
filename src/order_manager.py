@@ -51,57 +51,53 @@ class OrderManager:
         asks_thick_to_thin = list(reversed(asks_thin_to_thick))
         
         if direction == 'LONG':
-            # Entry: En kalın BID + 0.3%
+            # Entry: Thick BID + 0.3%
             thick_bid = bids_thick_to_thin[0].get('price', current_price) if bids_thick_to_thin else current_price
             entry_price = thick_bid * 1.003
             entry_vol = bids_thick_to_thin[0].get('volume', 0) if bids_thick_to_thin else 0
             
-            # SL: En kalın BID - 1.5%
-            sl = thick_bid * 0.985
+            # SL: Thick BID - 2%
+            sl = thick_bid * 0.98
             
-            # TP1: En ince ASK
-            thin_ask = asks_thin_to_thick[0].get('price', current_price * 1.02) if asks_thin_to_thick else current_price * 1.02
+            # TP1-TP3: ASK levels (higher than entry for LONG)
+            thin_ask = asks_thin_to_thick[0].get('price', entry_price * 1.01) if asks_thin_to_thick else entry_price * 1.01
             tp1 = thin_ask
             
-            # TP2: Orta ASK
             mid_idx = len(asks_thin_to_thick) // 2
-            mid_ask = asks_thin_to_thick[mid_idx].get('price', current_price * 1.03) if mid_idx < len(asks_thin_to_thick) else current_price * 1.03
+            mid_ask = asks_thin_to_thick[mid_idx].get('price', entry_price * 1.02) if mid_idx < len(asks_thin_to_thick) else entry_price * 1.02
             tp2 = mid_ask
             
-            # TP3: En kalın ASK
-            thick_ask = asks_thick_to_thin[0].get('price', current_price * 1.05) if asks_thick_to_thin else current_price * 1.05
+            thick_ask = asks_thick_to_thin[0].get('price', entry_price * 1.03) if asks_thick_to_thin else entry_price * 1.03
             tp3 = thick_ask
             
-            entry_reason = f"LONG: entry={entry_price:.4f} (thick bid+0.3%), vol={entry_vol:.0f})"
-            tp1_reason = f"TP1: {tp1:.4f} (ince ask)"
-            tp2_reason = f"TP2: {tp2:.4f} (orta ask-0.5%)"
-            tp3_reason = f"TP3: {tp3:.4f} (thick ask-1.5%)"
+            entry_reason = f"LONG: entry={entry_price:.4f}"
+            tp1_reason = f"TP1: {tp1:.4f}"
+            tp2_reason = f"TP2: {tp2:.4f}"
+            tp3_reason = f"TP3: {tp3:.4f}"
         else:
-            # SHORT: Entry: En kalın ASK - 1.5%
+            # SHORT: Thick ASK - 1.5%
             thick_ask = asks_thick_to_thin[0].get('price', current_price) if asks_thick_to_thin else current_price
             entry_price = thick_ask * 0.985
             entry_vol = asks_thick_to_thin[0].get('volume', 0) if asks_thick_to_thin else 0
             
-            # SL: En kalın ASK + 1.5%
-            sl = thick_ask * 1.015
+            # SL: Thick ASK + 2%
+            sl = thick_ask * 1.02
             
-            # TP1: En ince BID
-            thin_bid = bids_thin_to_thick[0].get('price', current_price * 0.98) if bids_thin_to_thick else current_price * 0.98
+            # TP1-TP3: BID levels (lower than entry for SHORT)
+            thin_bid = bids_thin_to_thick[0].get('price', entry_price * 0.99) if bids_thin_to_thick else entry_price * 0.99
             tp1 = thin_bid
             
-            # TP2: Orta BID
             mid_idx = len(bids_thin_to_thick) // 2
-            mid_bid = bids_thin_to_thick[mid_idx].get('price', current_price * 0.97) if mid_idx < len(bids_thin_to_thick) else current_price * 0.97
+            mid_bid = bids_thin_to_thick[mid_idx].get('price', entry_price * 0.98) if mid_idx < len(bids_thin_to_thick) else entry_price * 0.98
             tp2 = mid_bid
             
-            # TP3: En kalın BID
-            thick_bid = bids_thick_to_thin[0].get('price', current_price * 0.95) if bids_thick_to_thin else current_price * 0.95
+            thick_bid = bids_thick_to_thin[0].get('price', entry_price * 0.97) if bids_thick_to_thin else entry_price * 0.97
             tp3 = thick_bid
             
-            entry_reason = f"SHORT: entry={entry_price:.4f} (thick ask-1.5%), vol={entry_vol:.0f})"
-            tp1_reason = f"TP1: {tp1:.4f} (ince bid)"
-            tp2_reason = f"TP2: {tp2:.4f} (orta bid-0.5%)"
-            tp3_reason = f"TP3: {tp3:.4f} (thick bid-1.5%)"
+            entry_reason = f"SHORT: entry={entry_price:.4f}"
+            tp1_reason = f"TP1: {tp1:.4f}"
+            tp2_reason = f"TP2: {tp2:.4f}"
+            tp3_reason = f"TP3: {tp3:.4f}"
 
         precision = self._get_price_precision(symbol)
         
