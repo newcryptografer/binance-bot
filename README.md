@@ -3,13 +3,7 @@
 ## Kurulum
 
 ```bash
-# Python 3.12 yükle (sisteminizde yoksa)
-
-# Dependencies yükle
 pip install -r requirements.txt
-
-# veya
-pip install ccxt pandas numpy pyyaml python-dotenv
 ```
 
 ## Konfigürasyon
@@ -18,23 +12,20 @@ pip install ccxt pandas numpy pyyaml python-dotenv
 
 ```yaml
 binance:
-  api_key: "API_KEY"        # Paper mod için de doldur (canlı veri için gerekli)
-  api_secret: "API_SECRET"  # Paper mod için de doldur
+  api_key: "API_KEY"        # Canlı veri için gerekli
+  api_secret: "API_SECRET"
 
 trading:
-  mode: paper               # paper = canlı veri + simüle işlem, live = gerçek işlem
-  leverage: 10
-  entry_percent: 1.0
-  stop_loss_percent: 2.0
-  take_profit_percent: 3.0
-  tp2_percent: 5.0
-  trailing_stop_percent: 1.5
-  max_positions: 5
+  mode: paper               # paper veya live
+  leverage: 20             # 20x kaldıraç
+  entry_percent: 0.5        # %10 pozisyon (0.5% × 20x)
+  stop_loss_percent: 1.5    # %1.5
+  max_positions: 5         # Max 5 koin
   cooldown_minutes: 15
 
 scanning:
-  interval_seconds: 300
-  min_volume_usdt: 100000
+  interval_seconds: 300     # 5 dakika
+  min_volume_usdt: 100000   # Min hacim
   timeframe: 1h
 
 risk:
@@ -45,53 +36,54 @@ risk:
 ## Çalıştırma
 
 ```bash
-# Paper mod (canlı veri + risksiz işlem - ÖNERİLEN)
-python main.py --mode paper
-
-# Live mod (gerçek işlem)
-python main.py --mode live
+python main.py --mode paper  # ÖNERİLEN
+python main.py --mode live   # Gerçek işlem
 ```
 
 ## Kontroller
 
-- **S** - Manuel tarama başlat
-- **P** - Durdur/Devam et
+- **S** - Manuel tarama
+- **P** - Durdur/Devam
 - **C** - Tüm pozisyonları kapat
 - **Q** - Çıkış
 
-## Özellikler
+## Emir Stratejisi
 
-### Sinyal Analizi
-- RSI (14 periyot)
-- VWAP (Volume Weighted Average Price)
-- EMA 50/200 crossover
-- ADR (Average Daily Range)
-- Hacim oranı
-- Momentum
-- Orderbook imbalance (bid/ask volume)
+### Orderbook Yöntemi
 
-### Emir Stratejisi
-- **Entry:** Orderbook liquidity zone + VWAP destek/direnç
-- **TP1:** %3 (pozisyonun %50'si)
-- **TP2:** %5 (pozisyonun %50'si)
-- **SL:** %2
-- **Trailing:** TP1'e ulaşınca %1.5 trailing stop
+| LONG | Kural |
+|------|------|
+| **Entry** | En kalın BID +0.3% |
+| **SL** | En kalın BID -1.5% |
+| **TP1** | En ince ASK (%30 kapat) |
+| **TP2** | Orta ASK -0.5% (%30 kapat) |
+| **TP3** | En kalın ASK -1.5% (%100 kapat) |
 
-### Risk Yönetimi
-- Günlük max kayıp: %5
-- Art arda 3 kayıp = durdurma
-- Cross margin + Hedge mod
+| SHORT | Kural |
+|-------|-------|
+| **Entry** | En kalın ASK -1.5% |
+| **SL** | En kalın ASK +1.5% |
+| **TP1** | En ince BID (%30 kapat) |
+| **TP2** | Orta BID -0.5% (%30 kapat) |
+| **TP3** | En kalın BID -1.5% (%100 kapat) |
+
+### Pozisyon Dağılımı
+
+| Seviye | Kapatan % |
+|--------|-----------|
+| TP1 | %30 |
+| TP2 | %30 |
+| TP3 | %100 |
+
+### Kasa Kontrol
+
+- **Kaldıraç:** 20x
+- **Her koin:** %10 (0.5% × 20)
+- **Max pozisyon:** 5 koin (%50 toplam)
 
 ## Güvenlik
 
-1. İlk olarak `mode: paper` ile test edin (API key gerekli - canlı veri için)
-2. API key'inizi `config.yaml` veya `.env` dosyasına girin
-3. Risk limitlerini ihtiyacınıza göre ayarlayın
-4. `mode: live` ile gerçek işleme geçmeden önce paper modda yeterli test yapın
-
-## Not
-
-- Bot her 5 dakikada bir tarama yapar
-- En karlı 5 koin için sinyal üretir
-- Her koin eşit sermaye kullanır (toplam / 5)
-- Cross margin + Hedge mod açık (aynı koin için long+short açılabilir)
+1. İlk olarak `mode: paper` ile test edin
+2. API key gerekli (canlı veri için)
+3. Risk limitlerini ayarlayın
+4. `mode: live` öncesi paper modda test yapın

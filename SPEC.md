@@ -76,23 +76,21 @@ Score = (RSI_Uygunluk * 0.20) + (ADR * 0.15) + (VolScore * 0.15) + (Momentum * 0
 
 ```yaml
 binance:
-  api_key: "API_KEY"      # Paper mod için de doldur (canlı veri için gerekli)
+  api_key: "API_KEY"      # Canlı veri için gerekli
   api_secret: "API_SECRET"
 
 trading:
-  mode: paper             # paper = canlı veri + simüle, live = gerçek işlem
-  leverage: 10
-  entry_percent: 1.0      # %1 sermaye
-  stop_loss_percent: 2.0 # %2
-  take_profit_percent: 3.0 # %3
-  trailing_stop_percent: 1.5
+  mode: paper             # paper veya live
+  leverage: 20          # 20x kaldıraç
+  entry_percent: 0.5   # %10 pozisyon (0.5% × 20x)
+  stop_loss_percent: 1.5 # %1.5
   max_positions: 5
   cooldown_minutes: 15
 
 scanning:
   interval_seconds: 300  # 5 dakika
-  min_volume_usdt: 100000 # min hacim filter
-  
+  min_volume_usdt: 100000
+ 
 risk:
   max_daily_loss_percent: 5.0
   max_consecutive_losses: 3
