@@ -52,17 +52,20 @@ class RiskManager:
         entry_percent = config.trading.get('entry_percent', 1.0)
         leverage = config.trading.get('leverage', 10)
         
-        base_amount = balance * (entry_percent / 100)
-        position_size = base_amount * leverage
+        notional = balance * (entry_percent / 100) * leverage
         
-        min_notional = 10.0
-        if position_size < min_notional:
-            position_size = min_notional
+        ticker = binance_client.fetch_ticker(symbol)
+        current_price = float(ticker.get('last', 1))
         
-        return int(position_size)
+        if current_price > 0:
+            contracts = notional / current_price
+        else:
+            contracts = notional
         
-        precision = self._get_quantity_precision(symbol)
-        return round(position_size, precision)
+        if contracts < 0.001:
+            contracts = 0.001
+        
+        return round(contracts, 4)
 
     def _get_quantity_precision(self, symbol: str) -> int:
         try:
