@@ -77,17 +77,15 @@ class BinanceClient:
     
     def get_ticker(self, symbol: str) -> Dict[str, Any]:
         try:
-            resp = self.client.ticker_price(symbol=symbol)
-            return {
-                'last': float(resp.get('price', 0)),
-                'high': 0,
-                'low': 0,
-                'volume': 0,
-                'quoteVolume': 0,
-            }
+            if hasattr(self.client, 'ticker_price'):
+                resp = self.client.ticker_price(symbol=symbol)
+                return {'last': float(resp.get('price', 0)), 'high': 0, 'low': 0, 'volume': 0, 'quoteVolume': 0}
+            elif hasattr(self.client, 'ticker_24h'):
+                resp = self.client.ticker_24h(symbol=symbol)
+                return {'last': float(resp.get('lastPrice', 0)), 'high': float(resp.get('highPrice', 0)), 'low': float(resp.get('lowPrice', 0)), 'volume': float(resp.get('volume', 0)), 'quoteVolume': float(resp.get('quoteVolume', 0))}
         except Exception as e:
             logger.error(f"Error fetching ticker for {symbol}: {e}")
-            return {}
+        return {}
     
     def fetch_markets(self) -> List[Dict[str, Any]]:
         return self.get_markets()
@@ -167,11 +165,12 @@ class BinanceClient:
     
     def get_balance(self) -> float:
         try:
-            account = self.client.balance()
-            return float(account.get('availableBalance', 0))
+            if self._client:
+                account = self.client.balance()
+                return float(account.get('availableBalance', 0))
         except Exception as e:
             logger.error(f"Error fetching balance: {e}")
-            return 0
+        return 10000  # paper mode default balance
     
     def get_wallet_balance(self) -> float:
         return self.get_balance()
