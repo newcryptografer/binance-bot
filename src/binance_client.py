@@ -77,7 +77,7 @@ class BinanceClient:
     
     def get_ticker(self, symbol: str) -> Dict[str, Any]:
         try:
-            resp = self.client.ticker_24h(symbol=symbol)
+            resp = self.client.ticker(symbol=symbol)
             return {
                 'last': float(resp.get('lastPrice', 0)),
                 'high': float(resp.get('highPrice', 0)),
@@ -167,11 +167,8 @@ class BinanceClient:
     
     def get_balance(self) -> float:
         try:
-            account = self.client.account()
-            for balance in account.get('assets', []):
-                if balance.get('asset') == 'USDT':
-                    return float(balance.get('availableBalance', 0))
-            return 0
+            account = self.client.balance()
+            return float(account.get('availableBalance', 0))
         except Exception as e:
             logger.error(f"Error fetching balance: {e}")
             return 0
