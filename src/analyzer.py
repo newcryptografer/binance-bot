@@ -79,6 +79,27 @@ class TechnicalAnalyzer:
         lows = [candle[2] for candle in recent]
         highs = [candle[1] for candle in recent]
         return min(lows), max(highs)
+    
+    @staticmethod
+    def calculate_atr(ohlcv_data: List[List[float]], period: int = 14) -> float:
+        if len(ohlcv_data) < period + 1:
+            return 0.0
+        df = pd.DataFrame(ohlcv_data, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+        atr = df.ta.atr(length=period)
+        return float(atr.iloc[-1]) if not atr.empty else 0.0
+    
+    @staticmethod
+    def calculate_pivot_sr(ohlcv_data: List[List[float]]) -> Dict[str, float]:
+        if len(ohlcv_data) < 2:
+            return {'pivot': 0, 's1': 0, 's2': 0, 'r1': 0, 'r2': 0}
+        recent = ohlcv_data[-1]
+        high, low, close = recent[1], recent[2], recent[4]
+        pivot = (high + low + close) / 3
+        s1 = pivot * 2 - high
+        s2 = pivot - (high - low)
+        r1 = pivot * 2 - low
+        r2 = pivot + (high - low)
+        return {'pivot': pivot, 's1': s1, 's2': s2, 'r1': r1, 'r2': r2}
 
     def analyze_multi_timeframe(
         self,
@@ -137,25 +158,45 @@ class TechnicalAnalyzer:
                       volume: float, avg_volume: float) -> Dict[str, Any]:
         if not ohlcv_data:
             return {
-                'rsi': 50.0, 'vwap': 0.0, 'ema_50': 0.0, 'ema_200': 0.0,
+                'rsi': 50.0, 'vwap': 0.0, 'ema_9': 0.0, 'ema_21': 0.0, 'ema_50': 0.0, 'ema_200': 0.0,
+                'macd': 0.0, 'macd_signal': 0.0, 'macd_hist': 0.0,
+                'stoch_k': 50.0, 'stoch_d': 50.0,
+                'atr': 0.0,
+                'pivot': 0, 's1': 0, 's2': 0, 'r1': 0, 'r2': 0,
                 'adr': 0.0, 'momentum': 0.0, 'volume_ratio': 1.0,
                 'support': 0.0, 'resistance': 0.0,
             }
         df = self._prepare_dataframe(ohlcv_data)
         df.ta.rsi(length=14, append=True)
+        df.ta.ema(length=9, append=True)
+        df.ta.ema(length=21, append=True)
         df.ta.ema(length=50, append=True)
         df.ta.ema(length=200, append=True)
         df.ta.vwap(append=True)
+        df.ta.macd(fast=12, slow=26, signal=9, append=True)
+        df.ta.stoch(length=14, append=True)
+        df.ta.atr(length=14, append=True)
         
         closes = df['close'].values
         highs = df['high'].values
         lows = df['low'].values
         
+        pivot = self.calculate_pivot_sr(ohlcv_data)
+        
         return {
             'rsi': float(df['RSI_14'].iloc[-1]) if not df['RSI_14'].empty else 50.0,
             'vwap': float(df['VWAP'].iloc[-1]) if 'VWAP' in df.columns and not df['VWAP'].empty else closes[-1],
+            'ema_9': float(df['EMA_9'].iloc[-1]) if 'EMA_9' in df.columns and not df['EMA_9'].empty else 0.0,
+            'ema_21': float(df['EMA_21'].iloc[-1]) if 'EMA_21' in df.columns and not df['EMA_21'].empty else 0.0,
             'ema_50': float(df['EMA_50'].iloc[-1]) if 'EMA_50' in df.columns and not df['EMA_50'].empty else 0.0,
             'ema_200': float(df['EMA_200'].iloc[-1]) if 'EMA_200' in df.columns and not df['EMA_200'].empty else 0.0,
+            'macd': float(df['MACD_12_26_9'].iloc[-1]) if 'MACD_12_26_9' in df.columns and not df['MACD_12_26_9'].empty else 0.0,
+            'macd_signal': float(df['MACDs_12_26_9'].iloc[-1]) if 'MACDs_12_26_9' in df.columns and not df['MACDs_12_26_9'].empty else 0.0,
+            'macd_hist': float(df['MACDh_12_26_9'].iloc[-1]) if 'MACDh_12_26_9' in df.columns and not df['MACDh_12_26_9'].empty else 0.0,
+            'stoch_k': float(df['STOCHk_14'].iloc[-1]) if 'STOCHk_14' in df.columns and not df['STOCHk_14'].empty else 50.0,
+            'stoch_d': float(df['STOCHd_14'].iloc[-1]) if 'STOCHd_14' in df.columns and not df['STOCHd_14'].empty else 50.0,
+            'atr': float(df['ATR_14'].iloc[-1]) if 'ATR_14' in df.columns and not df['ATR_14'].empty else 0.0,
+            'pivot': pivot['pivot'], 's1': pivot['s1'], 's2': pivot['s2'], 'r1': pivot['r1'], 'r2': pivot['r2'],
             'adr': self.calculate_adr(list(highs), list(lows), list(closes)),
             'momentum': self.calculate_momentum(list(closes)),
             'volume_ratio': self.calculate_volume_ratio(volume, avg_volume),

@@ -13,81 +13,175 @@ class SignalGenerator:
 
     def calculate_long_score(self, data: Dict[str, Any]) -> float:
         score = 0.0
+        current_price = data.get('current_price', 0)
         
+        # === MOMENTUM (%20) ===
         rsi = data.get('rsi', 50)
-        if rsi < 35:
-            score += 25
-        elif rsi < 45:
+        if rsi < 30:
             score += 15
-        elif rsi > 70:
-            score -= 20
+        elif rsi < 40:
+            score += 10
+        elif rsi < 45:
+            score += 5
+        elif rsi > 65:
+            score -= 15
+        elif rsi > 55:
+            score -= 5
         
-        adr = data.get('adr', 0)
-        score += min(adr * 2, 20)
+        stoch_k = data.get('stoch_k', 50)
+        if stoch_k < 20:
+            score += 8
+        elif stoch_k < 30:
+            score += 5
         
-        vol_ratio = data.get('volume_ratio', 1)
-        score += min((vol_ratio - 1) * 10, 20)
+        macd = data.get('macd', 0)
+        macd_hist = data.get('macd_hist', 0)
+        if macd > 0 and macd_hist > 0:
+            score += 7
+        elif macd < 0 and macd_hist < 0:
+            score -= 5
         
-        momentum = data.get('momentum', 0)
-        score += momentum * 4
-        
+        # === TREND (%25) ===
+        ema_9 = data.get('ema_9', 0)
+        ema_21 = data.get('ema_21', 0)
         ema_50 = data.get('ema_50', 0)
         ema_200 = data.get('ema_200', 0)
-        current_price = data.get('current_price', 0)
-        if ema_50 > ema_200 and current_price > ema_50:
-            score += 15
+        
+        if ema_9 > ema_21 > ema_50:
+            score += 12
+        if ema_50 > ema_200:
+            score += 13
         elif current_price < ema_200:
             score -= 10
         
+        # === SUPPORT/RESISTANCE (%20) ===
         vwap = data.get('vwap', 0)
-        if current_price > vwap:
+        support = data.get('support', 0)
+        if current_price > vwap and vwap > 0:
             score += 10
+        if current_price > support and support > 0:
+            score += 5
         
+        pivot = data.get('pivot', 0)
+        s1 = data.get('s1', 0)
+        if current_price > s1 > 0:
+            score += 5
+        if current_price > vwap > s1:
+            score += 5
+        
+        # === VOLUME (%15) ===
+        vol_ratio = data.get('volume_ratio', 1)
+        score += min((vol_ratio - 1) * 8, 15)
+        
+        adr = data.get('adr', 0)
+        score += min(adr * 1.5, 10)
+        
+        # === ORDER FLOW (%20) ===
         ob_imbalance = data.get('ob_imbalance', 0)
-        if ob_imbalance > 0.2:
-            score += 15
-        elif ob_imbalance > 0.1:
+        if ob_imbalance > 0.25:
+            score += 12
+        elif ob_imbalance > 0.15:
             score += 8
+        elif ob_imbalance > 0.05:
+            score += 4
+        elif ob_imbalance < -0.15:
+            score -= 8
+        
+        ob_bid_vol = data.get('ob_bid_volume', 0)
+        ob_ask_vol = data.get('ob_ask_volume', 0)
+        if ob_bid_vol > ob_ask_vol * 1.5:
+            score += 8
+        
+        # === MOMENTUM ===
+        momentum = data.get('momentum', 0)
+        score += momentum * 3
         
         return score
 
     def calculate_short_score(self, data: Dict[str, Any]) -> float:
         score = 0.0
+        current_price = data.get('current_price', 0)
         
+        # === MOMENTUM (%20) ===
         rsi = data.get('rsi', 50)
-        if rsi > 65:
-            score += 25
-        elif rsi > 55:
+        if rsi > 70:
             score += 15
-        elif rsi < 30:
-            score -= 20
+        elif rsi > 60:
+            score += 10
+        elif rsi > 55:
+            score += 5
+        elif rsi < 35:
+            score -= 15
+        elif rsi < 45:
+            score -= 5
         
-        adr = data.get('adr', 0)
-        score += min(adr * 2, 20)
+        stoch_k = data.get('stoch_k', 50)
+        if stoch_k > 80:
+            score += 8
+        elif stoch_k > 70:
+            score += 5
         
-        vol_ratio = data.get('volume_ratio', 1)
-        score += min((vol_ratio - 1) * 10, 20)
+        macd = data.get('macd', 0)
+        macd_hist = data.get('macd_hist', 0)
+        if macd < 0 and macd_hist < 0:
+            score += 7
+        elif macd > 0 and macd_hist > 0:
+            score -= 5
         
-        momentum = data.get('momentum', 0)
-        score -= momentum * 4
-        
+        # === TREND (%25) ===
+        ema_9 = data.get('ema_9', 0)
+        ema_21 = data.get('ema_21', 0)
         ema_50 = data.get('ema_50', 0)
         ema_200 = data.get('ema_200', 0)
-        current_price = data.get('current_price', 0)
-        if ema_50 < ema_200 and current_price < ema_50:
-            score += 15
+        
+        if ema_9 < ema_21 < ema_50:
+            score += 12
+        if ema_50 < ema_200:
+            score += 13
         elif current_price > ema_200:
             score -= 10
         
+        # === SUPPORT/RESISTANCE (%20) ===
         vwap = data.get('vwap', 0)
-        if current_price < vwap:
+        resistance = data.get('resistance', 0)
+        if current_price < vwap and vwap > 0:
             score += 10
+        if current_price < resistance and resistance > 0:
+            score += 5
         
+        pivot = data.get('pivot', 0)
+        r1 = data.get('r1', 0)
+        if current_price < r1 and r1 > 0:
+            score += 5
+        if current_price < vwap < r1:
+            score += 5
+        
+        # === VOLUME (%15) ===
+        vol_ratio = data.get('volume_ratio', 1)
+        score += min((vol_ratio - 1) * 8, 15)
+        
+        adr = data.get('adr', 0)
+        score += min(adr * 1.5, 10)
+        
+        # === ORDER FLOW (%20) ===
         ob_imbalance = data.get('ob_imbalance', 0)
-        if ob_imbalance < -0.2:
-            score += 15
-        elif ob_imbalance < -0.1:
+        if ob_imbalance < -0.25:
+            score += 12
+        elif ob_imbalance < -0.15:
             score += 8
+        elif ob_imbalance < -0.05:
+            score += 4
+        elif ob_imbalance > 0.15:
+            score -= 8
+        
+        ob_bid_vol = data.get('ob_bid_volume', 0)
+        ob_ask_vol = data.get('ob_ask_volume', 0)
+        if ob_ask_vol > ob_bid_vol * 1.5:
+            score += 8
+        
+        # === MOMENTUM ===
+        momentum = data.get('momentum', 0)
+        score -= momentum * 3
         
         return score
 
