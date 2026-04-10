@@ -111,6 +111,9 @@ class OrderManager:
             'tp2_price': round(tp2, precision),
             'tp3_price': round(tp3, precision),
             'sl_price': round(sl, precision),
+            'tp1_percent': 30,   # %30 of position
+            'tp2_percent': 30,   # %30 of position
+            'tp3_percent': 40,   # %40 of position (remaining)
             'ob_imbalance': ob_data.get('imbalance', 0),
             'bid_volume': ob_data.get('total_bid_volume', 0),
             'ask_volume': ob_data.get('total_ask_volume', 0),
