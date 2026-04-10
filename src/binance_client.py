@@ -28,6 +28,7 @@ class BinanceClient:
         self._ws_thread: Optional[threading.Thread] = None
         self._price_cache: Dict[str, Dict] = {}
         self._running = False
+        self._paper_balance = 10000.0  # paper mode balance
         self._init_client()
     
     def _init_client(self):
@@ -164,14 +165,20 @@ class BinanceClient:
         }
     
     def get_balance(self) -> float:
-        if not self._client or self.is_paper:
-            return 10000  # paper mode default balance
+        if self.is_paper:
+            return self._paper_balance
+        if not self._client:
+            return 10000
         try:
             account = self.client.balance()
             return float(account.get('availableBalance', 0))
         except Exception as e:
             logger.error(f"Error fetching balance: {e}")
         return 10000
+    
+    def update_balance(self, amount: float):
+        if self.is_paper:
+            self._paper_balance += amount
     
     def get_wallet_balance(self) -> float:
         return self.get_balance()
