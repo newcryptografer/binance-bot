@@ -122,29 +122,24 @@ class SignalGenerator:
             if long_score > short_score and long_score > 20:
                 direction = 'LONG'
                 score = long_score
-                tp1_pct = 0.01
-                sl_pct = 0.02
             elif short_score > long_score and short_score > 20:
                 direction = 'SHORT'
                 score = short_score
-                tp1_pct = 0.01
-                sl_pct = 0.02
             
             if direction:
-                if direction == 'LONG':
-                    tp1 = entry_price * (1 + tp1_pct)
-                    sl = entry_price * (1 - sl_pct)
-                    rr = tp1_pct / sl_pct
-                else:
-                    tp1 = entry_price * (1 - tp1_pct)
-                    sl = entry_price * (1 + sl_pct)
-                    rr = tp1_pct / sl_pct
+                tp1 = 0.01
+                tp2 = 0.02
+                tp3 = 0.03
+                sl = 0.02
+                rr1 = tp1 / sl  # 0.5
+                rr2 = tp2 / sl  # 1.0
+                rr3 = tp3 / sl  # 1.5
                 
                 signals.append({
                     'symbol': data['symbol'],
                     'direction': direction,
                     'score': score,
-                    'rr': rr,
+                    'rr': rr3,  # Use TP3 for best RR
                     'entry_price': data.get('current_price', 0),
                     'vwap': data.get('vwap', 0),
                     'support': data.get('support', 0),
