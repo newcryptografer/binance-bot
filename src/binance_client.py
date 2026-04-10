@@ -185,6 +185,8 @@ class BinanceClient:
     
     @property
     def has_credentials(self) -> bool:
+        if self.is_paper:
+            return False
         api_key = config.binance.get('api_key', '')
         api_secret = config.binance.get('api_secret', '')
         return bool(api_key and api_secret)
