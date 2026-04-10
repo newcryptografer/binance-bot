@@ -63,14 +63,14 @@ class OrderManager:
             thin_ask = asks_thin_to_thick[0].get('price', current_price * 1.02) if asks_thin_to_thick else current_price * 1.02
             tp1 = thin_ask
             
-            # TP2: Orta ASK - min %3 ayrım
+            # TP2: Orta ASK
             mid_idx = len(asks_thin_to_thick) // 2
             mid_ask = asks_thin_to_thick[mid_idx].get('price', current_price * 1.03) if mid_idx < len(asks_thin_to_thick) else current_price * 1.03
-            tp2 = max(tp1 * 1.003, mid_ask)  # min 0.3% ayrım veya mid
+            tp2 = mid_ask
             
-            # TP3: En kalın ASK - min %5 ayrım
+            # TP3: En kalın ASK
             thick_ask = asks_thick_to_thin[0].get('price', current_price * 1.05) if asks_thick_to_thin else current_price * 1.05
-            tp3 = max(tp2 * 1.005, thick_ask * 0.995)  # min 0.5% ayrım
+            tp3 = thick_ask
             
             entry_reason = f"LONG: entry={entry_price:.4f} (thick bid+0.3%), vol={entry_vol:.0f})"
             tp1_reason = f"TP1: {tp1:.4f} (ince ask)"
@@ -89,14 +89,14 @@ class OrderManager:
             thin_bid = bids_thin_to_thick[0].get('price', current_price * 0.98) if bids_thin_to_thick else current_price * 0.98
             tp1 = thin_bid
             
-            # TP2: Orta BID - min %3 ayrım
+            # TP2: Orta BID
             mid_idx = len(bids_thin_to_thick) // 2
             mid_bid = bids_thin_to_thick[mid_idx].get('price', current_price * 0.97) if mid_idx < len(bids_thin_to_thick) else current_price * 0.97
-            tp2 = min(tp1 * 0.997, mid_bid)  # min 0.3% ayrım veya mid
+            tp2 = mid_bid
             
-            # TP3: En kalın BID - min %5 ayrım
+            # TP3: En kalın BID
             thick_bid = bids_thick_to_thin[0].get('price', current_price * 0.95) if bids_thick_to_thin else current_price * 0.95
-            tp3 = min(tp2 * 0.995, thick_bid * 0.985)  # min 0.5% ayrım
+            tp3 = thick_bid
             
             entry_reason = f"SHORT: entry={entry_price:.4f} (thick ask-1.5%), vol={entry_vol:.0f})"
             tp1_reason = f"TP1: {tp1:.4f} (ince bid)"
