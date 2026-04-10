@@ -164,13 +164,14 @@ class BinanceClient:
         }
     
     def get_balance(self) -> float:
+        if not self._client or self.is_paper:
+            return 10000  # paper mode default balance
         try:
-            if self._client:
-                account = self.client.balance()
-                return float(account.get('availableBalance', 0))
+            account = self.client.balance()
+            return float(account.get('availableBalance', 0))
         except Exception as e:
             logger.error(f"Error fetching balance: {e}")
-        return 10000  # paper mode default balance
+        return 10000
     
     def get_wallet_balance(self) -> float:
         return self.get_balance()
