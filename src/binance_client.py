@@ -77,13 +77,13 @@ class BinanceClient:
     
     def get_ticker(self, symbol: str) -> Dict[str, Any]:
         try:
-            resp = self.client.ticker(symbol=symbol)
+            resp = self.client.ticker_price(symbol=symbol)
             return {
-                'last': float(resp.get('lastPrice', 0)),
-                'high': float(resp.get('highPrice', 0)),
-                'low': float(resp.get('lowPrice', 0)),
-                'volume': float(resp.get('volume', 0)),
-                'quoteVolume': float(resp.get('quoteVolume', 0)),
+                'last': float(resp.get('price', 0)),
+                'high': 0,
+                'low': 0,
+                'volume': 0,
+                'quoteVolume': 0,
             }
         except Exception as e:
             logger.error(f"Error fetching ticker for {symbol}: {e}")
