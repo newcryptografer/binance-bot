@@ -38,8 +38,24 @@ class OrderManager:
             return False
 
     def calculate_prices_with_orderbook(self, symbol: str, direction: str, 
-                                         vwap: float, current_price: float) -> Optional[Dict[str, Any]]:
+                                         vwap: float, current_price: float, atr: float = 0) -> Optional[Dict[str, Any]]:
         ob_data = binance_client.get_orderbook_levels(symbol, 20)
+        
+        if atr == 0:
+            ohlcv = binance_client.fetch_ohlcv(symbol, '1h', 50)
+            if ohlcv and len(ohlcv) >= 14:
+                high = [c[1] for c in ohlcv]
+                low = [c[2] for c in ohlcv]
+                close = [c[4] for c in ohlcv]
+                tr = []
+                for i in range(1, len(ohlcv)):
+                    h_l = high[i] - low[i]
+                    h_c = abs(high[i] - close[i-1])
+                    l_c = abs(low[i] - close[i-1])
+                    tr.append(max(h_l, h_c, l_c))
+                atr = sum(tr[-14:]) / 14 if tr else 0
+            if not atr or atr == 0:
+                atr = current_price * 0.01
         
         bids = ob_data.get('bids', [])
         asks = ob_data.get('asks', [])
@@ -50,39 +66,33 @@ class OrderManager:
         bids_thick_to_thin = list(reversed(bids_thin_to_thick))
         asks_thick_to_thin = list(reversed(asks_thin_to_thick))
         
+        atr_mult = 1.5
+        
         if direction == 'LONG':
-            # Entry: Thick BID + 0.2%
-            thick_bid = bids_thick_to_thin[0].get('price', current_price) if bids_thick_to_thin else current_price
-            entry_price = thick_bid * 1.002
+            thick_bid = bids_thick_to_thin[0].get('price') if bids_thick_to_thin else current_price
+            entry_price = thick_bid * 1.001
             entry_vol = bids_thick_to_thin[0].get('volume', 0) if bids_thick_to_thin else 0
             
-            # SL: Entry - 2%
-            sl = entry_price * 0.98
+            sl = entry_price - (atr * 2)
+            tp1 = entry_price + (atr * atr_mult)
+            tp2 = entry_price + (atr * atr_mult * 2)
+            tp3 = entry_price + (atr * atr_mult * 3)
             
-            # TP: Fixed % from entry (consistent RR)
-            tp1 = entry_price * 1.01   # 1%
-            tp2 = entry_price * 1.02   # 2%
-            tp3 = entry_price * 1.03   # 3%
-            
-            entry_reason = f"LONG: entry={entry_price:.4f}"
-            tp1_reason = f"TP1: {tp1:.4f} (+1%)"
-            tp2_reason = f"TP2: {tp2:.4f} (+2%)"
-            tp3_reason = f"TP3: {tp3:.4f} (+3%)"
+            entry_reason = f"LONG: {entry_price:.4f} ATR={atr:.2f}"
+            tp1_reason = f"TP1: {tp1:.4f}"
+            tp2_reason = f"TP2: {tp2:.4f}"
+            tp3_reason = f"TP3: {tp3:.4f}"
         else:
-            # SHORT: Thick ASK - 0.2%
-            thick_ask = asks_thick_to_thin[0].get('price', current_price) if asks_thick_to_thin else current_price
-            entry_price = thick_ask * 0.998
+            thick_ask = asks_thick_to_thin[0].get('price') if asks_thick_to_thin else current_price
+            entry_price = thick_ask * 0.999
             entry_vol = asks_thick_to_thin[0].get('volume', 0) if asks_thick_to_thin else 0
             
-            # SL: Entry + 2%
-            sl = entry_price * 1.02
+            sl = entry_price + (atr * 2)
+            tp1 = entry_price - (atr * atr_mult)
+            tp2 = entry_price - (atr * atr_mult * 2)
+            tp3 = entry_price - (atr * atr_mult * 3)
             
-            # TP: Fixed % from entry
-            tp1 = entry_price * 0.99   # 1%
-            tp2 = entry_price * 0.98   # 2%
-            tp3 = entry_price * 0.97   # 3%
-            
-            entry_reason = f"SHORT: entry={entry_price:.4f}"
+            entry_reason = f"SHORT: {entry_price:.4f} ATR={atr:.2f}"
             tp1_reason = f"TP1: {tp1:.4f}"
             tp2_reason = f"TP2: {tp2:.4f}"
             tp3_reason = f"TP3: {tp3:.4f}"
