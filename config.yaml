@@ -5,9 +5,9 @@ binance:
 
 trading:
   mode: paper          # paper (live data, simulated trades) or live (real trades)
-  leverage: 10          # 1-125x
-  entry_percent: 1.0   # % of balance per trade
-  stop_loss_percent: 2.0
+  leverage: 20          # 20x kaldıraç
+  entry_percent: 0.5  # %10 = %0.5 * 20x
+  stop_loss_percent: 1.5
   take_profit_percent: 3.0
   tp2_percent: 5.0    # Second TP level
   trailing_stop_percent: 1.5
