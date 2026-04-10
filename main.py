@@ -270,10 +270,11 @@ class TradingBot:
             price_data = order_manager.calculate_prices_with_orderbook(
                 symbol, direction, signal.get('vwap'), signal.get('entry_price')
             )
-            if price_data:
-                logger.info(f"[PAPER] {direction} {symbol} entry={price_data['entry_price']:.4f} TP1={price_data['tp1_price']:.4f} TP2={price_data['tp2_price']:.4f} SL={price_data['sl_price']:.4f}")
-            else:
-                logger.info(f"[PAPER] {direction} {symbol} amount={amount} (OB okunamadı)")
+            if not price_data or not price_data.get('valid', True):
+                logger.info(f"[PAPER] Trade skipped: {symbol} (spread or SL condition)")
+                return
+            
+            logger.info(f"[PAPER] {direction} {symbol} entry={price_data['entry_price']:.4f} TP1={price_data['tp1_price']:.4f} TP2={price_data['tp2_price']:.4f} SL={price_data['sl_price']:.4f}")
             self._active_trades[symbol] = {
                 'direction': direction,
                 'entry_price': price_data.get('entry_price', signal.get('entry_price')),
