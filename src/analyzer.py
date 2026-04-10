@@ -17,6 +17,8 @@ class TechnicalAnalyzer:
             columns=['timestamp', 'open', 'high', 'low', 'close', 'volume']
         )
         df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+        df = df.sort_values('timestamp')
+        df = df.set_index('timestamp')
         return df
 
     @staticmethod
