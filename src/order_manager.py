@@ -44,119 +44,64 @@ class OrderManager:
         bids = ob_data.get('bids', [])
         asks = ob_data.get('asks', [])
         
-        # Sort: 0.001 (ince) → 0.3 (kalın)
         bids_thin_to_thick = sorted(bids, key=lambda x: x.get('volume', 0))
         asks_thin_to_thick = sorted(asks, key=lambda x: x.get('volume', 0))
         
-        # Reversed: 0.3 (kalın) → 0.001 (ince)
         bids_thick_to_thin = list(reversed(bids_thin_to_thick))
         asks_thick_to_thin = list(reversed(asks_thin_to_thick))
         
         if direction == 'LONG':
-            # Entry: En kalın BID (0.3)
-            if not bids_thick_to_thin or bids_thick_to_thin[0].get('volume', 0) == 0:
-                logger.info(f"LONG waiting: no bid zones")
-                return None
+            # Entry: En kalın BID + 0.3%
+            thick_bid = bids_thick_to_thin[0].get('price', current_price) if bids_thick_to_thin else current_price
+            entry_price = thick_bid * 1.003
+            entry_vol = bids_thick_to_thin[0].get('volume', 0) if bids_thick_to_thin else 0
             
-            entry_price = bids_thick_to_thin[0].get('price', current_price)
-            entry_vol = bids_thick_to_thin[0].get('volume', 0)
+            # SL: En kalın BID - 1.5%
+            sl = thick_bid * 0.985
             
-            # SL: En kalın BID - 0.3%
-            sl = entry_price * 0.997
+            # TP1: En ince ASK
+            thin_ask = asks_thin_to_thick[0].get('price', current_price * 1.02) if asks_thin_to_thick else current_price * 1.02
+            tp1 = thin_ask
             
-            # TP1: Orta zone
-            mid_idx = len(bids_thin_to_thick) // 2
-            tp1 = bids_thin_to_thick[mid_idx].get('price', current_price * 1.02) if mid_idx < len(bids_thin_to_thick) else current_price * 1.02
-            
-            # TP2: İnce zone (0.001)
-            tp2 = bids_thin_to_thick[0].get('price', current_price * 1.03) if bids_thin_to_thick else current_price * 1.03
-            
-            # TP3: İnce zone - 0.3%
-            tp3 = tp2 * 0.997
-            
-            entry_reason = f"LONG: {entry_price:.4f} (kalın:{entry_vol:.0f})"
-            tp1_reason = f"TP1: {tp1:.4f} (orta)"
-            tp2_reason = f"TP2: {tp2:.4f} (ince)"
-            tp3_reason = f"TP3: {tp3:.4f} (ince-0.3%)"
-        else:
-            # SHORT: En ince ASK (0.001)
-            if not asks_thin_to_thick or asks_thin_to_thick[0].get('volume', 0) == 0:
-                logger.info(f"SHORT waiting: no ask zones")
-                return None
-            
-            entry_price = asks_thin_to_thick[0].get('price', current_price)
-            entry_vol = asks_thin_to_thick[0].get('volume', 0)
-            
-            # SL: En ince ASK + 0.3%
-            sl = entry_price * 1.003
-            
-            # TP1: Orta zone
+            # TP2: Orta ASK - 0.5%
             mid_idx = len(asks_thin_to_thick) // 2
-            tp1 = asks_thin_to_thick[mid_idx].get('price', current_price * 0.98) if mid_idx < len(asks_thin_to_thick) else current_price * 0.98
+            mid_ask = asks_thin_to_thick[mid_idx].get('price', current_price * 1.03) if mid_idx < len(asks_thin_to_thick) else current_price * 1.03
+            tp2 = mid_ask * 0.995
             
-            # TP2: Kalın zone (0.3)
-            tp2 = asks_thick_to_thin[0].get('price', current_price * 0.97) if asks_thick_to_thin else current_price * 0.97
+            # TP3: En kalın ASK - 1.5%
+            thick_ask = asks_thick_to_thin[0].get('price', current_price * 1.05) if asks_thick_to_thin else current_price * 1.05
+            tp3 = thick_ask * 0.985
             
-            # TP3: Kalın zone + 0.3%
-            tp3 = tp2 * 1.003
-            
-            entry_reason = f"SHORT: {entry_price:.4f} (ince:{entry_vol:.0f})"
-            tp1_reason = f"TP1: {tp1:.4f} (orta)"
-            tp2_reason = f"TP2: {tp2:.4f} (kalın)"
-            tp3_reason = f"TP3: {tp3:.4f} (kalın+0.3%)"
-            tp3_reason = f"TP3: {tp3:.4f} (thick ASK)"
+            entry_reason = f"LONG: entry={entry_price:.4f} (thick bid+0.3%), vol={entry_vol:.0f})"
+            tp1_reason = f"TP1: {tp1:.4f} (ince ask)"
+            tp2_reason = f"TP2: {tp2:.4f} (orta ask-0.5%)"
+            tp3_reason = f"TP3: {tp3:.4f} (thick ask-1.5%)"
         else:
-            # SHORT: Entry: En ince ASK (en az satış baskısı)
-            if not ask_zones or ask_zones[0]['volume'] == 0:
-                logger.info(f"SHORT waiting: no ask zones")
-                return None
+            # SHORT: Entry: En kalın ASK - 1.5%
+            thick_ask = asks_thick_to_thin[0].get('price', current_price) if asks_thick_to_thin else current_price
+            entry_price = thick_ask * 0.985
+            entry_vol = asks_thick_to_thin[0].get('volume', 0) if asks_thick_to_thin else 0
             
-            entry_price = ask_zones[0]['price']  # En ince ask seviyesinde gir
-            vwap_resistance = max(vwap_15m, ask_zones[0]['price'])
+            # SL: En kalın ASK + 1.5%
+            sl = thick_ask * 1.015
             
-            # Fiyat bu seviyede veya üstünde olmalı
-            if current_price < entry_price * 0.99:
-                logger.info(f"SHORT waiting: price too low below ask zone")
-                return None
+            # TP1: En ince BID
+            thin_bid = bids_thin_to_thick[0].get('price', current_price * 0.98) if bids_thin_to_thick else current_price * 0.98
+            tp1 = thin_bid
             
-            # SL: En ince ask üstünde
-            sl = max(entry_price * (1 + self.sl_percent / 100), vwap_resistance * 1.01)
+            # TP2: Orta BID - 0.5%
+            mid_idx = len(bids_thin_to_thick) // 2
+            mid_bid = bids_thin_to_thick[mid_idx].get('price', current_price * 0.97) if mid_idx < len(bids_thin_to_thick) else current_price * 0.97
+            tp2 = mid_bid * 0.995
             
-            # TP1/TP2/TP3: BID zones (en kalından en inceye doğru - fiyat düşerken)
-            tp1 = bids_sorted[0].get('price', current_price * 0.98) if len(bids_sorted) > 0 else current_price * 0.98
-            tp2 = bids_sorted[1].get('price', current_price * 0.96) if len(bids_sorted) > 1 else current_price * 0.96
-            tp3 = bids_sorted[2].get('price', vwap_4h * 0.95) if len(bids_sorted) > 2 else vwap_4h * 0.95
+            # TP3: En kalın BID - 1.5%
+            thick_bid = bids_thick_to_thin[0].get('price', current_price * 0.95) if bids_thick_to_thin else current_price * 0.95
+            tp3 = thick_bid * 0.985
             
-            entry_reason = f"Entry: {entry_price:.4f} (min ASK vol:{ask_zones[0].get('volume', 0):.0f})"
-            tp1_reason = f"TP1: {tp1:.4f} (thick BID)"
-            tp2_reason = f"TP2: {tp2:.4f} (medium BID)"
-            tp3_reason = f"TP3: {tp3:.4f} (thin BID)"
-            # Entry: Fiyat 15m VWAP direnç seviyesine gelince gir
-            vwap_resistance = max(vwap_15m, ob_data.get('strong_ask', vwap_15m * 1.01))
-            
-            # Fiyat VWAP direnç seviyesinde veya üstünde olmalı (direnci kırmış olmalı)
-            if current_price < vwap_resistance:
-                logger.info(f"SHORT waiting: price {current_price} below VWAP resistance {vwap_resistance}")
-                return None
-            
-            entry_price = current_price  # Market fiyatından gir
-            
-            # SL: VWAP direnç ÜSTÜNDE (SHORT için SL yukarıda - kaybettiğimiz yer)
-            sl = max(entry_price * (1 + self.sl_percent / 100), vwap_resistance)
-            
-            # TP1: Orderbook BID ilk kalın bölge
-            tp1 = bid_zones[0]['price'] if bid_zones and len(bid_zones) > 0 else current_price * 0.97
-            
-            # TP2: Orderbook BID ikinci kalın bölge
-            tp2 = bid_zones[1]['price'] if bid_zones and len(bid_zones) > 1 else current_price * 0.95
-            
-            # TP3: Orderbook BID üçüncü kalın bölge veya 4h VWAP
-            tp3 = bid_zones[2]['price'] if bid_zones and len(bid_zones) > 2 else vwap_4h * 0.95
-            
-            entry_reason = f"Entry: {entry_price:.4f} (VWAP resistance:{vwap_resistance:.4f})"
-            tp1_reason = f"TP1: {tp1:.4f} (OB thick zone 1: {bid_zones[0].get('volume', 0):.0f} contracts)"
-            tp2_reason = f"TP2: {tp2:.4f} (OB thick zone 2: {bid_zones[1].get('volume', 0):.0f} contracts)"
-            tp3_reason = f"TP3: {tp3:.4f} (OB thick zone 3: {bid_zones[2].get('volume', 0):.0f} contracts)"
+            entry_reason = f"SHORT: entry={entry_price:.4f} (thick ask-1.5%), vol={entry_vol:.0f})"
+            tp1_reason = f"TP1: {tp1:.4f} (ince bid)"
+            tp2_reason = f"TP2: {tp2:.4f} (orta bid-0.5%)"
+            tp3_reason = f"TP3: {tp3:.4f} (thick bid-1.5%)"
 
         precision = self._get_price_precision(symbol)
         
@@ -167,16 +112,12 @@ class OrderManager:
             'tp3_price': round(tp3, precision),
             'sl_price': round(sl, precision),
             'ob_imbalance': ob_data.get('imbalance', 0),
-            'bid_volume': ob_data.get('bid_volume', 0),
-            'ask_volume': ob_data.get('ask_volume', 0),
+            'bid_volume': ob_data.get('total_bid_volume', 0),
+            'ask_volume': ob_data.get('total_ask_volume', 0),
             'entry_reason': entry_reason,
             'tp1_reason': tp1_reason,
             'tp2_reason': tp2_reason,
             'tp3_reason': tp3_reason,
-            'vwap': vwap_15m,
-            'vwap_4h': vwap_4h,
-            'vwap_1d': vwap_1d,
-            'ob_zones': {'bids': bid_zones, 'asks': ask_zones},
             'valid': True,
         }
 
