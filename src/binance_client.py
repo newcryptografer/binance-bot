@@ -8,8 +8,12 @@ from typing import Dict, Any, List, Optional
 
 try:
     from binance.futures import Futures
-except ImportError:
-    print("Warning: binance-futures-connector not installed")
+except (ImportError, NameError):
+    try:
+        from binance.um_futures import UMFutures as Futures
+    except (ImportError, NameError):
+        print("Warning: binance-futures-connector not installed")
+        Futures = None
 
 from src.config import config
 
