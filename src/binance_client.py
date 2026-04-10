@@ -85,6 +85,15 @@ class BinanceClient:
             logger.error(f"Error fetching ticker for {symbol}: {e}")
             return {}
     
+    def fetch_markets(self) -> List[Dict[str, Any]]:
+        return self.get_markets()
+    
+    def fetch_ticker(self, symbol: str) -> Dict[str, Any]:
+        return self.get_ticker(symbol)
+    
+    def fetch_ohlcv(self, symbol: str, interval: str = "1h", limit: int = 200) -> List[List[float]]:
+        return self.get_klines(symbol, interval, limit)
+    
     def get_orderbook_levels(self, symbol: str, levels: int = 20) -> Dict[str, Any]:
         try:
             depth = self.client.depth(symbol=symbol, limit=levels)
@@ -163,6 +172,19 @@ class BinanceClient:
             logger.error(f"Error fetching balance: {e}")
             return 0
     
+    def get_wallet_balance(self) -> float:
+        return self.get_balance()
+    
+    @property
+    def has_credentials(self) -> bool:
+        api_key = config.binance.get('api_key', '')
+        api_secret = config.binance.get('api_secret', '')
+        return bool(api_key and api_secret)
+    
+    @property
+    def exchange(self):
+        return self._client
+    
     def set_leverage(self, symbol: str, leverage: int) -> bool:
         if self.is_paper:
             logger.info(f"[PAPER] Set leverage {leverage}x for {symbol}")
@@ -219,6 +241,9 @@ class BinanceClient:
         except Exception as e:
             logger.error(f"Error fetching positions: {e}")
             return []
+    
+    def fetch_positions(self) -> List[Dict[str, Any]]:
+        return self.get_positions()
     
     def cancel_order(self, symbol: str, order_id: str) -> bool:
         if self.is_paper:
@@ -327,6 +352,12 @@ class BinanceWebSocket:
     @property
     def prices(self) -> Dict[str, Dict]:
         return self._price_cache
+    
+    def get_ticker_data(self, symbol: str) -> Optional[Dict[str, Any]]:
+        return self._price_cache.get(symbol)
+    
+    def subscribe_markets(self, symbols: List[str], callback):
+        pass
 
 
 binance_client = BinanceClient()
