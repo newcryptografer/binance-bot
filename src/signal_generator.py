@@ -115,29 +115,36 @@ class SignalGenerator:
             long_score = self.calculate_long_score(data)
             short_score = self.calculate_short_score(data)
             
+            entry_price = data.get('current_price', 0)
+            direction = None
+            score = 0
+            
             if long_score > short_score and long_score > 20:
-                signals.append({
-                    'symbol': data['symbol'],
-                    'direction': 'LONG',
-                    'score': long_score,
-                    'entry_price': data.get('current_price', 0),
-                    'vwap': data.get('vwap', 0),
-                    'support': data.get('support', 0),
-                    'resistance': data.get('resistance', 0),
-                    'rsi': data.get('rsi', 50),
-                    'ob_imbalance': data.get('ob_imbalance', 0),
-                    'ob_bid_volume': data.get('ob_bid_volume', 0),
-                    'ob_ask_volume': data.get('ob_ask_volume', 0),
-                    'strong_bid': data.get('strong_bid'),
-                    'strong_ask': data.get('strong_ask'),
-                    'stop_loss_percent': config.trading.get('stop_loss_percent', 2.0),
-                    'take_profit_percent': config.trading.get('take_profit_percent', 3.0),
-                })
+                direction = 'LONG'
+                score = long_score
+                tp1_pct = 0.01
+                sl_pct = 0.02
             elif short_score > long_score and short_score > 20:
+                direction = 'SHORT'
+                score = short_score
+                tp1_pct = 0.01
+                sl_pct = 0.02
+            
+            if direction:
+                if direction == 'LONG':
+                    tp1 = entry_price * (1 + tp1_pct)
+                    sl = entry_price * (1 - sl_pct)
+                    rr = tp1_pct / sl_pct
+                else:
+                    tp1 = entry_price * (1 - tp1_pct)
+                    sl = entry_price * (1 + sl_pct)
+                    rr = tp1_pct / sl_pct
+                
                 signals.append({
                     'symbol': data['symbol'],
-                    'direction': 'SHORT',
-                    'score': short_score,
+                    'direction': direction,
+                    'score': score,
+                    'rr': rr,
                     'entry_price': data.get('current_price', 0),
                     'vwap': data.get('vwap', 0),
                     'support': data.get('support', 0),
@@ -152,7 +159,7 @@ class SignalGenerator:
                     'take_profit_percent': config.trading.get('take_profit_percent', 3.0),
                 })
         
-        signals.sort(key=lambda x: x['score'], reverse=True)
+        signals.sort(key=lambda x: (x['rr'], x['score']), reverse=True)
         return signals[:self.max_positions]
 
     def get_top_signals(self, limit: int = 5) -> List[Dict[str, Any]]:
