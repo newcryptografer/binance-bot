@@ -107,9 +107,9 @@ class OrderManager:
             'tp2_price': round(tp2, precision),
             'tp3_price': round(tp3, precision),
             'sl_price': round(sl, precision),
-            'tp1_percent': 30,   # %30 of position
-            'tp2_percent': 30,   # %30 of position
-            'tp3_percent': 100,  # %100 of position (remaining)
+            'tp1_percent': 30,
+            'tp2_percent': 30,
+            'tp3_percent': 100,
             'ob_imbalance': ob_data.get('imbalance', 0),
             'bid_volume': ob_data.get('total_bid_volume', 0),
             'ask_volume': ob_data.get('total_ask_volume', 0),
@@ -117,8 +117,28 @@ class OrderManager:
             'tp1_reason': tp1_reason,
             'tp2_reason': tp2_reason,
             'tp3_reason': tp3_reason,
-            'valid': True,
+            'valid': self._check_min_spread(direction, entry_price, tp1, sl),
         }
+    
+    def _check_min_spread(self, direction: str, entry: float, tp: float, sl: float) -> bool:
+        min_spread = 0.005  # 0.5% minimum
+        
+        if direction == 'LONG':
+            tp_pct = (tp - entry) / entry
+            sl_pct = (entry - sl) / entry
+        else:
+            tp_pct = (entry - tp) / entry
+            sl_pct = (sl - entry) / entry
+        
+        if tp_pct < min_spread:
+            logger.info(f"Trade skipped: TP spread {tp_pct*100:.2f}% < {min_spread*100}%")
+            return False
+        
+        if sl_pct >= tp_pct:
+            logger.info(f"Trade skipped: SL/RR ratio bad ({sl_pct/tp_pct:.2f})")
+            return False
+        
+        return True
 
     def calculate_tp_prices(self, entry_price: float, direction: str) -> tuple:
         if direction == 'LONG':
