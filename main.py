@@ -266,14 +266,21 @@ class TradingBot:
         logger.info(f"Signal: {direction} on {symbol} @ {signal.get('entry_price')} (Paper mode - no trade executed)")
         
         if config.is_paper_mode:
-            logger.info(f"[PAPER] Would trade: {direction} {symbol} amount={risk_manager.calculate_position_size(symbol, direction)}")
+            amount = risk_manager.calculate_position_size(symbol, direction)
+            price_data = order_manager.calculate_prices_with_orderbook(
+                symbol, direction, signal.get('vwap'), signal.get('entry_price')
+            )
+            if price_data:
+                logger.info(f"[PAPER] {direction} {symbol} entry={price_data['entry_price']:.4f} TP1={price_data['tp1_price']:.4f} TP2={price_data['tp2_price']:.4f} SL={price_data['sl_price']:.4f}")
+            else:
+                logger.info(f"[PAPER] {direction} {symbol} amount={amount} (OB okunamadı)")
             self._active_trades[symbol] = {
                 'direction': direction,
-                'entry_price': signal.get('entry_price'),
-                'amount': risk_manager.calculate_position_size(symbol, direction),
-                'sl_price': signal.get('entry_price', 0) * 0.98,
-                'tp1_price': signal.get('entry_price', 0) * 1.03,
-                'tp2_price': signal.get('entry_price', 0) * 1.05,
+                'entry_price': price_data.get('entry_price', signal.get('entry_price')),
+                'amount': amount,
+                'sl_price': price_data.get('sl_price', signal.get('entry_price', 0) * 0.98),
+                'tp1_price': price_data.get('tp1_price', signal.get('entry_price', 0) * 1.03),
+                'tp2_price': price_data.get('tp2_price', signal.get('entry_price', 0) * 1.05),
                 'tp1_filled': False,
                 'tp2_filled': False,
                 'created_at': datetime.now(),
