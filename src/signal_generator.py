@@ -213,10 +213,10 @@ class SignalGenerator:
             direction = None
             score = 0
             
-            if long_score > short_score and long_score > 20:
+            if long_score > short_score:
                 direction = 'LONG'
                 score = long_score
-            elif short_score > long_score and short_score > 20:
+            elif short_score > long_score:
                 direction = 'SHORT'
                 score = short_score
             
