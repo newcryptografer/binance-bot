@@ -41,6 +41,12 @@ class SignalGenerator:
         elif macd < 0 and macd_hist < 0:
             score -= 5
         
+        adx = data.get('adx', 0)
+        if adx >= 25:
+            score += 10
+        elif adx >= 20:
+            score += 5
+        
         # === TREND (%25) ===
         ema_9 = data.get('ema_9', 0)
         ema_21 = data.get('ema_21', 0)
@@ -221,8 +227,12 @@ class SignalGenerator:
                 score = short_score
             
             structure = data.get('structure', 'unknown')
+            adx = data.get('adx', 0)
+            
             if structure == 'range':
-                continue  # Range'de işlem yok
+                continue
+            if adx > 0 and adx < 20:
+                continue  # Weak trend, skip
             
             if direction:
                 tp1 = 0.01

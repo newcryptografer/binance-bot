@@ -205,6 +205,7 @@ class TechnicalAnalyzer:
             }
         df = self._prepare_dataframe(ohlcv_data)
         df.ta.rsi(length=14, append=True)
+        df.ta.adx(length=14, append=True)
         df.ta.ema(length=9, append=True)
         df.ta.ema(length=21, append=True)
         df.ta.ema(length=50, append=True)
@@ -223,6 +224,7 @@ class TechnicalAnalyzer:
         
         return {
             'rsi': float(df['RSI_14'].iloc[-1]) if not df['RSI_14'].empty else 50.0,
+            'adx': float(df['ADX_14'].iloc[-1]) if 'ADX_14' in df.columns and not df['ADX_14'].empty else 0.0,
             'vwap': float(df['VWAP'].iloc[-1]) if 'VWAP' in df.columns and not df['VWAP'].empty else closes[-1],
             'ema_9': float(df['EMA_9'].iloc[-1]) if 'EMA_9' in df.columns and not df['EMA_9'].empty else 0.0,
             'ema_21': float(df['EMA_21'].iloc[-1]) if 'EMA_21' in df.columns and not df['EMA_21'].empty else 0.0,
