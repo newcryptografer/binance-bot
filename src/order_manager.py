@@ -119,7 +119,7 @@ class OrderManager:
         }
     
     def _check_min_spread(self, direction: str, entry: float, tp: float, sl: float) -> bool:
-        min_spread = 0.008  # 0.8% minimum (for 1:1 RR with 2% SL)
+        min_spread = 0.002  # 0.2% minimum
         
         if direction == 'LONG':
             tp_pct = (tp - entry) / entry
@@ -130,10 +130,6 @@ class OrderManager:
         
         if tp_pct < min_spread:
             logger.info(f"Trade skipped: TP spread {tp_pct*100:.2f}% < {min_spread*100}%")
-            return False
-        
-        if sl_pct >= tp_pct:
-            logger.info(f"Trade skipped: SL/RR ratio bad ({sl_pct/tp_pct:.2f})")
             return False
         
         return True
