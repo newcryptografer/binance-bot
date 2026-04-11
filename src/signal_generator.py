@@ -220,6 +220,10 @@ class SignalGenerator:
                 direction = 'SHORT'
                 score = short_score
             
+            structure = data.get('structure', 'unknown')
+            if structure == 'range':
+                continue  # Range'de işlem yok
+            
             if direction:
                 tp1 = 0.01
                 tp2 = 0.02

@@ -100,6 +100,43 @@ class TechnicalAnalyzer:
         r1 = pivot * 2 - low
         r2 = pivot + (high - low)
         return {'pivot': pivot, 's1': s1, 's2': s2, 'r1': r1, 'r2': r2}
+    
+    @staticmethod
+    def calculate_market_structure(ohlcv_data: List[List[float]], lookback: int = 50) -> Dict[str, Any]:
+        if len(ohlcv_data) < lookback:
+            return {'structure': 'unknown', 'trend': 'neutral', 'swing': 0}
+        
+        recent = ohlcv_data[-lookback:]
+        highs = [c[1] for c in recent]
+        lows = [c[2] for c in recent]
+        closes = [c[4] for c in recent]
+        
+        hh = max(highs[-10:])
+        ll = min(lows[-10:])
+        prev_hh = max(highs[-20:-10]) if len(highs) >= 20 else hh
+        prev_ll = min(lows[-20:-10]) if len(lows) >= 20 else ll
+        
+        if hh > prev_hh and ll > prev_ll:
+            structure = 'uptrend'
+            trend = 'bullish'
+        elif hh < prev_hh and ll < prev_ll:
+            structure = 'downtrend'
+            trend = 'bearish'
+        else:
+            structure = 'range'
+            trend = 'neutral'
+        
+        swing = hh - ll
+        range_pct = swing / closes[-1] * 100 if closes[-1] > 0 else 0
+        
+        return {
+            'structure': structure,
+            'trend': trend,
+            'hh': hh,
+            'll': ll,
+            'swing': swing,
+            'range_pct': range_pct
+        }
 
     def analyze_multi_timeframe(
         self,
@@ -182,6 +219,7 @@ class TechnicalAnalyzer:
         lows = df['low'].values
         
         pivot = self.calculate_pivot_sr(ohlcv_data)
+        structure = self.calculate_market_structure(ohlcv_data)
         
         return {
             'rsi': float(df['RSI_14'].iloc[-1]) if not df['RSI_14'].empty else 50.0,
@@ -202,6 +240,9 @@ class TechnicalAnalyzer:
             'volume_ratio': self.calculate_volume_ratio(volume, avg_volume),
             'support': self.calculate_support_resistance(ohlcv_data)[0],
             'resistance': self.calculate_support_resistance(ohlcv_data)[1],
+            'structure': structure['structure'],
+            'trend': structure['trend'],
+            'range_pct': structure['range_pct'],
         }
 
 
