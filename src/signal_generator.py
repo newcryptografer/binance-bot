@@ -10,217 +10,96 @@ from src.smc_decision_engine import smc_engine
 class ConfluenceSystem:
     """
     KESİŞİM (CONFLOENCE) SİSTEMİ
-    Sinyal = Gösterge1 + Gösterge2 + Gösterge3 + Yapı
+    Sinyal = (Gösterge1 + Gösterge2 + Gösterge3) + Yapı
     
-    Göstergeler:
-    1. RSI - Momentum (Aşırı alım/satım)
-    2. MACD - Trend (Crossover)
-    3. Stochastic - Momentum
-    4. EMA Cross - Trend yönü
-    5. VWAP - Değer alanı
-    6. Volume - Hacim onayı
-    7. Order Flow - Likidite
-    
-    Yapı (SMC):
-    - Market Structure (1h + 4h)
+    3 Gösterge (MACD + Stochastic + EMA) + Yapı = Sinyal
     """
     
     def __init__(self):
-        self.min_confluence = 3  # Minimum gösterge onayı
-    
-    def check_rsi(self, data: Dict[str, Any], direction: str) -> Dict[str, Any]:
-        """Gösterge 1: RSI - Momentum"""
-        rsi = data.get('rsi', 50)
-        
-        if direction == 'LONG':
-            if rsi < 30:
-                return {'confirm': True, 'strength': 3, 'reason': 'RSI oversold'}
-            elif rsi < 40:
-                return {'confirm': True, 'strength': 2, 'reason': 'RSI < 40'}
-            elif rsi < 50:
-                return {'confirm': True, 'strength': 1, 'reason': 'RSI < 50'}
-            else:
-                return {'confirm': False, 'strength': 0, 'reason': f'RSI {rsi:.1f}'}
-        else:
-            if rsi > 70:
-                return {'confirm': True, 'strength': 3, 'reason': 'RSI overbought'}
-            elif rsi > 60:
-                return {'confirm': True, 'strength': 2, 'reason': 'RSI > 60'}
-            elif rsi > 50:
-                return {'confirm': True, 'strength': 1, 'reason': 'RSI > 50'}
-            else:
-                return {'confirm': False, 'strength': 0, 'reason': f'RSI {rsi:.1f}'}
+        self.min_confluence = 3
     
     def check_macd(self, data: Dict[str, Any], direction: str) -> Dict[str, Any]:
-        """Gösterge 2: MACD - Trend"""
+        """Gösterge 1: MACD"""
         macd = data.get('macd', 0)
         macd_hist = data.get('macd_hist', 0)
-        macd_signal = data.get('macd_signal', 0)
         
         if direction == 'LONG':
             if macd > 0 and macd_hist > 0:
-                return {'confirm': True, 'strength': 3, 'reason': 'MACD bullish cross'}
-            elif macd > macd_signal:
-                return {'confirm': True, 'strength': 2, 'reason': 'MACD > signal'}
-            elif macd_hist > 0:
-                return {'confirm': True, 'strength': 1, 'reason': 'MACD hist positive'}
-            else:
-                return {'confirm': False, 'strength': 0, 'reason': 'MACD bearish'}
+                return {'confirm': True, 'strength': 1}
+            elif macd > 0:
+                return {'confirm': True, 'strength': 0.5}
+            return {'confirm': False, 'strength': 0}
         else:
             if macd < 0 and macd_hist < 0:
-                return {'confirm': True, 'strength': 3, 'reason': 'MACD bearish cross'}
-            elif macd < macd_signal:
-                return {'confirm': True, 'strength': 2, 'reason': 'MACD < signal'}
-            elif macd_hist < 0:
-                return {'confirm': True, 'strength': 1, 'reason': 'MACD hist negative'}
-            else:
-                return {'confirm': False, 'strength': 0, 'reason': 'MACD bullish'}
+                return {'confirm': True, 'strength': 1}
+            elif macd < 0:
+                return {'confirm': True, 'strength': 0.5}
+            return {'confirm': False, 'strength': 0}
     
     def check_stochastic(self, data: Dict[str, Any], direction: str) -> Dict[str, Any]:
-        """Gösterge 3: Stochastic - Momentum"""
+        """Gösterge 2: Stochastic"""
         stoch_k = data.get('stoch_k', 50)
-        stoch_d = data.get('stoch_d', 50)
         
         if direction == 'LONG':
             if stoch_k < 20:
-                return {'confirm': True, 'strength': 3, 'reason': 'Stoch oversold'}
-            elif stoch_k < 30:
-                return {'confirm': True, 'strength': 2, 'reason': 'Stoch < 30'}
-            elif stoch_k < stoch_d:
-                return {'confirm': True, 'strength': 1, 'reason': 'Stoch K < D'}
-            else:
-                return {'confirm': False, 'strength': 0, 'reason': f'Stoch {stoch_k:.1f}'}
+                return {'confirm': True, 'strength': 1}
+            elif stoch_k < 40:
+                return {'confirm': True, 'strength': 0.5}
+            return {'confirm': False, 'strength': 0}
         else:
             if stoch_k > 80:
-                return {'confirm': True, 'strength': 3, 'reason': 'Stoch overbought'}
-            elif stoch_k > 70:
-                return {'confirm': True, 'strength': 2, 'reason': 'Stoch > 70'}
-            elif stoch_k > stoch_d:
-                return {'confirm': True, 'strength': 1, 'reason': 'Stoch K > D'}
-            else:
-                return {'confirm': False, 'strength': 0, 'reason': f'Stoch {stoch_k:.1f}'}
+                return {'confirm': True, 'strength': 1}
+            elif stoch_k > 60:
+                return {'confirm': True, 'strength': 0.5}
+            return {'confirm': False, 'strength': 0}
     
-    def check_ema_cross(self, data: Dict[str, Any], direction: str) -> Dict[str, Any]:
-        """Gösterge 4: EMA Cross - Trend"""
+    def check_ema(self, data: Dict[str, Any], direction: str) -> Dict[str, Any]:
+        """Gösterge 3: EMA"""
         ema_9 = data.get('ema_9', 0)
         ema_21 = data.get('ema_21', 0)
-        ema_50 = data.get('ema_50', 0)
         
         if direction == 'LONG':
-            if ema_9 > ema_21 > ema_50:
-                return {'confirm': True, 'strength': 3, 'reason': 'EMA bullish align'}
-            elif ema_9 > ema_21:
-                return {'confirm': True, 'strength': 2, 'reason': 'EMA 9 > 21'}
-            elif ema_9 > ema_50:
-                return {'confirm': True, 'strength': 1, 'reason': 'EMA 9 > 50'}
-            else:
-                return {'confirm': False, 'strength': 0, 'reason': 'EMA bearish'}
+            if ema_9 > ema_21:
+                return {'confirm': True, 'strength': 1}
+            return {'confirm': False, 'strength': 0}
         else:
-            if ema_9 < ema_21 < ema_50:
-                return {'confirm': True, 'strength': 3, 'reason': 'EMA bearish align'}
-            elif ema_9 < ema_21:
-                return {'confirm': True, 'strength': 2, 'reason': 'EMA 9 < 21'}
-            elif ema_9 < ema_50:
-                return {'confirm': True, 'strength': 1, 'reason': 'EMA 9 < 50'}
-            else:
-                return {'confirm': False, 'strength': 0, 'reason': 'EMA bullish'}
+            if ema_9 < ema_21:
+                return {'confirm': True, 'strength': 1}
+            return {'confirm': False, 'strength': 0}
     
-    def check_vwap(self, data: Dict[str, Any], direction: str) -> Dict[str, Any]:
-        """Gösterge 5: VWAP - Değer Alanı"""
-        vwap = data.get('vwap', 0)
-        current_price = data.get('current_price', 0)
-        
-        if vwap == 0 or current_price == 0:
-            return {'confirm': False, 'strength': 0, 'reason': 'No VWAP'}
+    def check_structure(self, data: Dict[str, Any], direction: str) -> Dict[str, Any]:
+        """Yapı: Market Structure"""
+        structure = data.get('structure', 'unknown')
         
         if direction == 'LONG':
-            if current_price > vwap:
-                return {'confirm': True, 'strength': 2, 'reason': 'Price above VWAP'}
-            else:
-                return {'confirm': False, 'strength': 0, 'reason': 'Price below VWAP'}
+            if structure == 'uptrend':
+                return {'confirm': True, 'strength': 1}
+            return {'confirm': False, 'strength': 0}
         else:
-            if current_price < vwap:
-                return {'confirm': True, 'strength': 2, 'reason': 'Price below VWAP'}
-            else:
-                return {'confirm': False, 'strength': 0, 'reason': 'Price above VWAP'}
-    
-    def check_volume(self, data: Dict[str, Any], direction: str) -> Dict[str, Any]:
-        """Gösterge 6: Volume - Hacim Onayı"""
-        vol_ratio = data.get('volume_ratio', 1)
-        
-        if vol_ratio >= 1.5:
-            return {'confirm': True, 'strength': 3, 'reason': f'High volume {vol_ratio:.1f}x'}
-        elif vol_ratio >= 1.2:
-            return {'confirm': True, 'strength': 2, 'reason': f'Elevated volume {vol_ratio:.1f}x'}
-        elif vol_ratio >= 1.0:
-            return {'confirm': True, 'strength': 1, 'reason': f'Normal volume {vol_ratio:.1f}x'}
-        else:
-            return {'confirm': False, 'strength': 0, 'reason': f'Low volume {vol_ratio:.1f}x'}
-    
-    def check_order_flow(self, data: Dict[str, Any], direction: str) -> Dict[str, Any]:
-        """Gösterge 7: Order Flow - Likidite"""
-        ob_imbalance = data.get('ob_imbalance', 0)
-        
-        if direction == 'LONG':
-            if ob_imbalance > 0.25:
-                return {'confirm': True, 'strength': 3, 'reason': 'Strong buy imbalance'}
-            elif ob_imbalance > 0.15:
-                return {'confirm': True, 'strength': 2, 'reason': 'Moderate buy imbalance'}
-            elif ob_imbalance > 0:
-                return {'confirm': True, 'strength': 1, 'reason': 'Slight buy imbalance'}
-            else:
-                return {'confirm': False, 'strength': 0, 'reason': 'Sell pressure'}
-        else:
-            if ob_imbalance < -0.25:
-                return {'confirm': True, 'strength': 3, 'reason': 'Strong sell imbalance'}
-            elif ob_imbalance < -0.15:
-                return {'confirm': True, 'strength': 2, 'reason': 'Moderate sell imbalance'}
-            elif ob_imbalance < 0:
-                return {'confirm': True, 'strength': 1, 'reason': 'Slight sell imbalance'}
-            else:
-                return {'confirm': False, 'strength': 0, 'reason': 'Buy pressure'}
+            if structure == 'downtrend':
+                return {'confirm': True, 'strength': 1}
+            return {'confirm': False, 'strength': 0}
     
     def calculate_confluence(self, data: Dict[str, Any], direction: str) -> Dict[str, Any]:
-        """
-        Ana Confluence Hesaplama
-        Signal = Gösterge1 + Gösterge2 + Gösterge3 + + Yapı
-        """
-        indicators = [
-            ('RSI', self.check_rsi(data, direction)),
-            ('MACD', self.check_macd(data, direction)),
-            ('Stochastic', self.check_stochastic(data, direction)),
-            ('EMA', self.check_ema_cross(data, direction)),
-            ('VWAP', self.check_vwap(data, direction)),
-            ('Volume', self.check_volume(data, direction)),
-            ('OrderFlow', self.check_order_flow(data, direction)),
-        ]
+        """Signal = (Gösterge1 + Gösterge2 + Gösterge3) + Yapı"""
+        ind1 = self.check_macd(data, direction)
+        ind2 = self.check_stochastic(data, direction)
+        ind3 = self.check_ema(data, direction)
+        struct = self.check_structure(data, direction)
         
-        total_confirmations = 0
-        total_strength = 0
-        confirmed_indicators = []
+        confirmations = sum(1 for r in [ind1, ind2, ind3] if r['confirm'])
+        total_strength = ind1['strength'] + ind2['strength'] + ind3['strength']
         
-        for name, result in indicators:
-            if result['confirm']:
-                total_confirmations += 1
-                total_strength += result['strength']
-                confirmed_indicators.append(f"{name}:{result['strength']}")
-        
-        confluence_score = (total_confirmations / len(indicators)) * 100
-        normalized_strength = min(total_strength / (len(indicators) * 3) * 100, 100)
-        
-        structure = data.get('structure', 'unknown')
-        if structure in ['uptrend', 'downtrend']:
-            total_strength += 2
-            normalized_strength = min(total_strength / (len(indicators) * 3) * 100, 100)
-            confirmed_indicators.append('Structure:2')
+        if struct['confirm']:
+            total_strength += struct['strength']
         
         return {
-            'confluence_score': confluence_score,
-            'strength_score': normalized_strength,
-            'confirmations': total_confirmations,
-            'total_indicators': len(indicators),
-            'confirmed_list': ','.join(confirmed_indicators),
-            'meets_minimum': total_confirmations >= self.min_confluence,
+            'signal': confirmations + (1 if struct['confirm'] else 0),
+            'strength': total_strength,
+            'confirmations': confirmations,
+            'meets_minimum': confirmations >= 3,
+            'structure_confirmed': struct['confirm'],
+            'ind_confirmed': f"MACD:{ind1['confirm']},Stoch:{ind2['confirm']},EMA:{ind3['confirm']},Struct:{struct['confirm']}"
         }
 
 
