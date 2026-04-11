@@ -232,9 +232,13 @@ class SignalGenerator:
             if structure == 'range':
                 continue
             if adx > 0 and adx < 20:
-                continue  # Weak trend, skip
+                continue
             
+            min_score = 35  # Min signal quality
             if direction:
+                temp_score = long_score if direction == 'LONG' else short_score
+                if temp_score < min_score:
+                    continue
                 tp1 = 0.01
                 tp2 = 0.02
                 tp3 = 0.03
@@ -243,16 +247,27 @@ class SignalGenerator:
                 rr2 = tp2 / sl  # 1.0
                 rr3 = tp3 / sl  # 1.5
                 
+                grade = 'D'
+                if score >= 80:
+                    grade = 'A'
+                elif score >= 60:
+                    grade = 'B'
+                elif score >= 40:
+                    grade = 'C'
+                
                 signals.append({
                     'symbol': data['symbol'],
                     'direction': direction,
                     'score': score,
-                    'rr': rr3,  # Use TP3 for best RR
+                    'grade': grade,
+                    'rr': rr3,
                     'entry_price': data.get('current_price', 0),
                     'vwap': data.get('vwap', 0),
                     'support': data.get('support', 0),
                     'resistance': data.get('resistance', 0),
                     'rsi': data.get('rsi', 50),
+                    'adx': data.get('adx', 0),
+                    'structure': data.get('structure', 'unknown'),
                     'ob_imbalance': data.get('ob_imbalance', 0),
                     'ob_bid_volume': data.get('ob_bid_volume', 0),
                     'ob_ask_volume': data.get('ob_ask_volume', 0),
