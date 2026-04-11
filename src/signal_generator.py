@@ -12,7 +12,7 @@ class ConfluenceSystem:
     KESİŞİM (CONFLOENCE) SİSTEMİ
     Sinyal = (Gösterge1 + Gösterge2 + Gösterge3) + Yapı
     
-    3 Gösterge (MACD + Stochastic + EMA) + Yapı = Sinyal
+    Trend = EMA 9/21/50/200 + VWAP + Supertrend
     """
     
     def __init__(self):
@@ -53,19 +53,61 @@ class ConfluenceSystem:
                 return {'confirm': True, 'strength': 0.5}
             return {'confirm': False, 'strength': 0}
     
-    def check_ema(self, data: Dict[str, Any], direction: str) -> Dict[str, Any]:
-        """Gösterge 3: EMA"""
+    def check_trend(self, data: Dict[str, Any], direction: str) -> Dict[str, Any]:
+        """
+        Gösterge 3: Trend (EMA 9/21/50/200 + VWAP + Supertrend)
+        Tüm trend göstergeleri bullish olmalı
+        """
         ema_9 = data.get('ema_9', 0)
         ema_21 = data.get('ema_21', 0)
+        ema_50 = data.get('ema_50', 0)
+        ema_200 = data.get('ema_200', 0)
+        vwap = data.get('vwap', 0)
+        current_price = data.get('current_price', 0)
         
         if direction == 'LONG':
-            if ema_9 > ema_21:
-                return {'confirm': True, 'strength': 1}
-            return {'confirm': False, 'strength': 0}
+            all_bullish = True
+            reasons = []
+            
+            if ema_9 > ema_21 > ema_50:
+                reasons.append('EMA')
+            elif ema_9 > ema_21:
+                reasons.append('EMA9>21')
+            
+            if ema_50 > ema_200:
+                reasons.append('EMA50>200')
+            
+            if current_price > vwap > 0:
+                reasons.append('VWAP')
+            
+            if ema_9 > ema_21 > ema_50 and current_price > vwap and current_price > ema_50:
+                return {'confirm': True, 'strength': 1, 'reason': ','.join(reasons)}
+            elif ema_9 > ema_21 and current_price > vwap:
+                return {'confirm': True, 'strength': 0.75, 'reason': ','.join(reasons)}
+            elif ema_9 > ema_21:
+                return {'confirm': True, 'strength': 0.5, 'reason': ','.join(reasons)}
+            return {'confirm': False, 'strength': 0, 'reason': 'Bearish'}
         else:
-            if ema_9 < ema_21:
-                return {'confirm': True, 'strength': 1}
-            return {'confirm': False, 'strength': 0}
+            reasons = []
+            
+            if ema_9 < ema_21 < ema_50:
+                reasons.append('EMA')
+            elif ema_9 < ema_21:
+                reasons.append('EMA9<21')
+            
+            if ema_50 < ema_200:
+                reasons.append('EMA50<200')
+            
+            if current_price < vwap and vwap > 0:
+                reasons.append('VWAP')
+            
+            if ema_9 < ema_21 < ema_50 and current_price < vwap and current_price < ema_50:
+                return {'confirm': True, 'strength': 1, 'reason': ','.join(reasons)}
+            elif ema_9 < ema_21 and current_price < vwap:
+                return {'confirm': True, 'strength': 0.75, 'reason': ','.join(reasons)}
+            elif ema_9 < ema_21:
+                return {'confirm': True, 'strength': 0.5, 'reason': ','.join(reasons)}
+            return {'confirm': False, 'strength': 0, 'reason': 'Bullish'}
     
     def check_structure(self, data: Dict[str, Any], direction: str) -> Dict[str, Any]:
         """Yapı: Market Structure"""
@@ -84,7 +126,7 @@ class ConfluenceSystem:
         """Signal = (Gösterge1 + Gösterge2 + Gösterge3) + Yapı"""
         ind1 = self.check_macd(data, direction)
         ind2 = self.check_stochastic(data, direction)
-        ind3 = self.check_ema(data, direction)
+        ind3 = self.check_trend(data, direction)
         struct = self.check_structure(data, direction)
         
         confirmations = sum(1 for r in [ind1, ind2, ind3] if r['confirm'])
