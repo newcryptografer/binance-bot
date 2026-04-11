@@ -119,7 +119,7 @@ class OrderManager:
         }
     
     def _check_min_spread(self, direction: str, entry: float, tp: float, sl: float) -> bool:
-        min_spread = 0.002  # 0.2% minimum
+        min_spread = 0.003  # 0.3% minimum
         
         if direction == 'LONG':
             tp_pct = (tp - entry) / entry
