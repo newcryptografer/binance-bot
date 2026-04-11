@@ -27,7 +27,7 @@ class Scanner:
         
         return [m['symbol'] for m in self._cached_markets]
 
-    def scan_symbol(self, symbol: str) -> Optional[Dict[str, Any]]:
+    def scan_symbol(self, symbol: str, fetch_multi_tf: bool = True) -> Optional[Dict[str, Any]]:
         try:
             ws_ticker = binance_ws.get_ticker_data(symbol)
             
@@ -54,6 +54,18 @@ class Scanner:
             analysis['current_price'] = current_price
             analysis['volume'] = volume
             analysis['avg_volume'] = avg_volume
+            
+            if fetch_multi_tf:
+                try:
+                    ohlcv_1h = binance_client.fetch_ohlcv(symbol, '1h', 50)
+                    ohlcv_4h = binance_client.fetch_ohlcv(symbol, '4h', 50)
+                    ohlcv_1d = binance_client.fetch_ohlcv(symbol, '1d', 30)
+                    
+                    analysis['ohlcv_1h'] = ohlcv_1h
+                    analysis['ohlcv_4h'] = ohlcv_4h
+                    analysis['ohlcv_1d'] = ohlcv_1d
+                except Exception as e:
+                    logger.debug(f"Multi-TF error for {symbol}: {e}")
             
             return analysis
             

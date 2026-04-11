@@ -4,6 +4,7 @@ from src.scanner import scanner
 from src.binance_client import binance_client
 from src.logger import logger
 from src.config import config
+from src.smc_decision_engine import smc_engine
 
 
 class SignalGenerator:
@@ -205,6 +206,44 @@ class SignalGenerator:
             data['ob_bid_volume'] = 0
             data['ob_ask_volume'] = 0
         return data
+    
+    def get_smc_decision(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        SMC Karar Motoru'ndan yön kararı al
+        Piyasa yapısı hem 1h hem de 4h/1D için analiz edilir
+        """
+        try:
+            data_1h = data.get('ohlcv_1h', [])
+            data_4h = data.get('ohlcv_4h', [])
+            data_1d = data.get('ohlcv_1d', [])
+            
+            technical_data = {
+                'rsi': data.get('rsi', 50),
+                'adx': data.get('adx', 0),
+                'momentum': data.get('momentum', 0),
+                'momentum_score': 0,
+                'technical_score': 0
+            }
+            
+            if technical_data.get('rsi', 50) < 40 or technical_data.get('rsi', 50) > 60:
+                technical_data['momentum_score'] = 20
+            
+            if technical_data.get('adx', 0) >= 25:
+                technical_data['technical_score'] = 20
+            
+            decision = smc_engine.get_entry_direction(data_1h, data_4h, data_1d if data_1d else None, technical_data)
+            
+            return decision
+        except Exception as e:
+            logger.debug(f"SMC decision error: {e}")
+            return {
+                'decision': 'WAIT',
+                'reason': str(e),
+                'confidence': 0,
+                'structure_confirmed': False,
+                'main_trend': 'none',
+                'entry_allowed': False
+            }
 
     def generate_signals(self, scanned_data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         signals = []
@@ -212,19 +251,28 @@ class SignalGenerator:
         for data in scanned_data:
             data = self.enrich_with_orderbook(data['symbol'], data)
             
+            smc_decision = self.get_smc_decision(data)
+            
+            if not smc_decision.get('entry_allowed', False):
+                continue
+            
+            smc_direction = smc_decision.get('main_trend', 'none')
+            confidence = smc_decision.get('confidence', 0)
+            
             long_score = self.calculate_long_score(data)
             short_score = self.calculate_short_score(data)
             
-            entry_price = data.get('current_price', 0)
             direction = None
             score = 0
             
-            if long_score > short_score:
+            if smc_direction == 'LONG':
                 direction = 'LONG'
-                score = long_score
-            elif short_score > long_score:
+                score = long_score + confidence
+            elif smc_direction == 'SHORT':
                 direction = 'SHORT'
-                score = short_score
+                score = short_score + confidence
+            else:
+                continue
             
             structure = data.get('structure', 'unknown')
             adx = data.get('adx', 0)
@@ -234,48 +282,50 @@ class SignalGenerator:
             if adx > 0 and adx < 20:
                 continue
             
-            min_score = 35  # Min signal quality
-            if direction:
-                temp_score = long_score if direction == 'LONG' else short_score
-                if temp_score < min_score:
-                    continue
-                tp1 = 0.01
-                tp2 = 0.02
-                tp3 = 0.03
-                sl = 0.02
-                rr1 = tp1 / sl  # 0.5
-                rr2 = tp2 / sl  # 1.0
-                rr3 = tp3 / sl  # 1.5
-                
-                grade = 'D'
-                if score >= 80:
-                    grade = 'A'
-                elif score >= 60:
-                    grade = 'B'
-                elif score >= 40:
-                    grade = 'C'
-                
-                signals.append({
-                    'symbol': data['symbol'],
-                    'direction': direction,
-                    'score': score,
-                    'grade': grade,
-                    'rr': rr3,
-                    'entry_price': data.get('current_price', 0),
-                    'vwap': data.get('vwap', 0),
-                    'support': data.get('support', 0),
-                    'resistance': data.get('resistance', 0),
-                    'rsi': data.get('rsi', 50),
-                    'adx': data.get('adx', 0),
-                    'structure': data.get('structure', 'unknown'),
-                    'ob_imbalance': data.get('ob_imbalance', 0),
-                    'ob_bid_volume': data.get('ob_bid_volume', 0),
-                    'ob_ask_volume': data.get('ob_ask_volume', 0),
-                    'strong_bid': data.get('strong_bid'),
-                    'strong_ask': data.get('strong_ask'),
-                    'stop_loss_percent': config.trading.get('stop_loss_percent', 2.0),
-                    'take_profit_percent': config.trading.get('take_profit_percent', 3.0),
-                })
+            min_score = 35
+            temp_score = long_score if direction == 'LONG' else short_score
+            if temp_score < min_score:
+                continue
+            
+            tp1 = 0.01
+            tp2 = 0.02
+            tp3 = 0.03
+            sl = 0.02
+            rr1 = tp1 / sl
+            rr2 = tp2 / sl
+            rr3 = tp3 / sl
+            
+            grade = 'D'
+            if score >= 80:
+                grade = 'A'
+            elif score >= 60:
+                grade = 'B'
+            elif score >= 40:
+                grade = 'C'
+            
+            signals.append({
+                'symbol': data['symbol'],
+                'direction': direction,
+                'score': score,
+                'grade': grade,
+                'rr': rr3,
+                'entry_price': data.get('current_price', 0),
+                'vwap': data.get('vwap', 0),
+                'support': data.get('support', 0),
+                'resistance': data.get('resistance', 0),
+                'rsi': data.get('rsi', 50),
+                'adx': data.get('adx', 0),
+                'structure': data.get('structure', 'unknown'),
+                'ob_imbalance': data.get('ob_imbalance', 0),
+                'ob_bid_volume': data.get('ob_bid_volume', 0),
+                'ob_ask_volume': data.get('ob_ask_volume', 0),
+                'strong_bid': data.get('strong_bid'),
+                'strong_ask': data.get('strong_ask'),
+                'smc_confidence': confidence,
+                'smc_reason': smc_decision.get('reason', ''),
+                'stop_loss_percent': config.trading.get('stop_loss_percent', 2.0),
+                'take_profit_percent': config.trading.get('take_profit_percent', 3.0),
+            })
         
         signals.sort(key=lambda x: (x['rr'], x['score']), reverse=True)
         return signals[:self.max_positions]
