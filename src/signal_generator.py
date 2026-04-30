@@ -150,6 +150,9 @@ class SignalGenerator:
         self.max_positions = config.trading.get('max_positions', 5)
         self.cooldown_minutes = config.trading.get('cooldown_minutes', 15)
         self.confluence = ConfluenceSystem()
+        self._smc_cache: Dict[str, Dict] = {}
+        self._cache_ttl = 30
+        self.current_option = config.trading.get('smc_option', 1)
         # cache for SMC decisions to avoid recomputation per symbol each scan cycle
         self._smc_cache: Dict[str, Dict] = {}
         self._cache_ttl = 30  # seconds
@@ -477,25 +480,32 @@ class SignalGenerator:
         
         return self.generate_signals(scanned)[:limit]
     
-    def _get_cached_smc_decision(self, symbol: str, data: Dict[str, Any]) -> Dict[str, Any]:
-        """Get cached SMC decision or compute if expired"""
+    def _get_smc_decision(self, symbol: str, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Get SMC decision using new engine with caching"""
         from time import time
         now = time()
         
-        # Check cache
         if symbol in self._smc_cache:
-            cache_entry = self._smc_cache[symbol]
-            if now - cache_entry['timestamp'] < self._cache_ttl:
-                return cache_entry['result']
+            entry = self._smc_cache[symbol]
+            if now - entry['timestamp'] < self._cache_ttl:
+                return entry['result']
         
-        # Compute new decision
-        result = self.get_smc_decision(data)
-        
-        # Update cache
-        self._smc_cache[symbol] = {
-            'result': result,
-            'timestamp': now
+        data_1h = data.get('ohlcv_1h', [])
+        data_4h = data.get('ohlcv_4h', [])
+        data_1d = data.get('ohlcv_1d')
+        technical_data = {
+            'momentum_score': 0,
+            'technical_score': 0,
+            'rsi': data.get('rsi', 50),
+            'macd': data.get('macd', 0),
+            'adx': data.get('adx', 0)
         }
+        option = self.current_option
+        result = smc_engine.get_entry_direction(data_1h, data_4h, data_1d, technical_data, option)
+        
+        if len(self._smc_cache) > 100:
+            self._smc_cache.clear()
+        self._smc_cache[symbol] = {'result': result, 'timestamp': now}
         return result
 
 
