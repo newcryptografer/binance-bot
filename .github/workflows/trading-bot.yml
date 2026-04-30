@@ -1,0 +1,88 @@
+name: Binance Futures Trading Bot
+
+on:
+  # Manuel olarak tetikle (GitHub Actions sekmesinden "Run workflow" butonu)
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Trading mode'
+        required: true
+        default: 'paper'
+        type: choice
+        options:
+          - paper
+          - live
+      duration:
+        description: 'Max runtime in minutes (0 = 300 min / 5 saat)'
+        required: false
+        default: '300'
+
+  # Her gün UTC 00:00'da otomatik paper mode çalıştır (isteğe bağlı)
+  # Yorumu kaldırarak etkinleştirebilirsiniz:
+  # schedule:
+  #   - cron: '0 0 * * *'
+
+jobs:
+  run-bot:
+    name: Run Trading Bot (${{ github.event.inputs.mode || 'paper' }} mode)
+    runs-on: ubuntu-latest
+    timeout-minutes: 350   # GitHub Actions max = 360 dk
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Create logs directory
+        run: mkdir -p logs
+
+      - name: Write config with secrets
+        env:
+          BINANCE_API_KEY: ${{ secrets.BINANCE_API_KEY }}
+          BINANCE_API_SECRET: ${{ secrets.BINANCE_API_SECRET }}
+        run: |
+          # Eğer secret tanımlanmışsa config'i güncelle, yoksa boş bırak (paper mode için gerekmez)
+          if [ -n "$BINANCE_API_KEY" ]; then
+            python - <<'EOF'
+          import yaml, os
+          with open('config.yaml', 'r') as f:
+              cfg = yaml.safe_load(f)
+          cfg['binance']['api_key'] = os.environ['BINANCE_API_KEY']
+          cfg['binance']['api_secret'] = os.environ['BINANCE_API_SECRET']
+          with open('config.yaml', 'w') as f:
+              yaml.dump(cfg, f, default_flow_style=False, allow_unicode=True)
+          print("API keys configured from secrets.")
+          EOF
+          else
+            echo "No API secrets found - running in public data mode (paper only)"
+          fi
+
+      - name: Run Trading Bot
+        env:
+          TRADING_MODE: ${{ github.event.inputs.mode || 'paper' }}
+          PYTHONUNBUFFERED: '1'
+        run: |
+          DURATION=${{ github.event.inputs.duration || '300' }}
+          MODE=${{ github.event.inputs.mode || 'paper' }}
+          echo "Starting bot in $MODE mode for $DURATION minutes..."
+          python main.py \
+            --mode "$MODE" \
+            --no-input \
+            --no-dashboard \
+            --duration "$DURATION"
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bot-logs-${{ github.run_id }}
+          path: logs/
+          retention-days: 7

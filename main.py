@@ -95,6 +95,7 @@ class TradingBot:
     def __init__(self):
         self._running = False
         self._paused = False
+        self._no_input = False
         self._scan_interval = config.scanning.get('interval_seconds', 300)
         self._last_scan_time: Optional[datetime] = None
         self._active_trades: Dict[str, Dict[str, Any]] = {}
@@ -132,8 +133,9 @@ class TradingBot:
         binance_ws.connect()
         logger.info("WebSocket stream connected")
 
-        input_thread = threading.Thread(target=self._handle_input, daemon=True)
-        input_thread.start()
+        if not self._no_input:
+            input_thread = threading.Thread(target=self._handle_input, daemon=True)
+            input_thread.start()
 
         self._main_loop()
 
@@ -152,8 +154,11 @@ class TradingBot:
                 elif user_input == 'q':
                     print("Shutting down...")
                     self._running = False
-            except:
-                pass
+            except EOFError:
+                # Non-interactive environment (CI/GitHub Actions) - disable input loop
+                time.sleep(60)
+            except Exception:
+                time.sleep(1)
 
     def _main_loop(self):
         while self._running:
@@ -572,6 +577,10 @@ def parse_args():
                         help='Path to config file')
     parser.add_argument('--no-dashboard', action='store_true',
                         help='Disable web dashboard')
+    parser.add_argument('--no-input', action='store_true',
+                        help='Disable interactive input (for CI/GitHub Actions)')
+    parser.add_argument('--duration', type=int, default=0,
+                        help='Max runtime in minutes (0 = unlimited)')
     return parser.parse_args()
 
 
@@ -591,12 +600,24 @@ def main():
     
     bot = TradingBot()
     bot_instance = bot
-    
+
+    # Set duration-based shutdown if specified
+    if args.duration > 0:
+        def _auto_shutdown():
+            time.sleep(args.duration * 60)
+            logger.info(f"Duration limit reached ({args.duration} min), shutting down...")
+            bot._running = False
+        shutdown_thread = threading.Thread(target=_auto_shutdown, daemon=True)
+        shutdown_thread.start()
+
     if not args.no_dashboard:
         dashboard = DashboardServer(bot)
         dashboard.start()
         logger.info(f"Dashboard: http://localhost:5000")
-    
+
+    if args.no_input:
+        bot._no_input = True
+
     bot.start()
 
 
