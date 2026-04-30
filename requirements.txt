@@ -1,8 +1,8 @@
-binance-futures-connector==4.1.0
-pandas==2.2.3
-pandas-ta==0.4.71b0
+binance-futures-connector>=4.1.0
+pandas>=2.3.2
+pandas-ta>=0.4.71b0
 numpy>=2.2.6
-pyyaml==6.0.2
-websocket-client==1.8.0
-python-dotenv==1.0.1
-flask==3.0.0
+pyyaml>=6.0.2
+websocket-client>=1.8.0
+python-dotenv>=1.0.1
+flask>=3.0.0
