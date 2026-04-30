@@ -3,7 +3,7 @@ import numpy as np
 from typing import Dict, Any, List, Tuple, Optional
 from datetime import datetime
 
-import pandas_ta as ta
+import ta
 
 
 class TechnicalAnalyzer:
