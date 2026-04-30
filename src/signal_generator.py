@@ -150,6 +150,9 @@ class SignalGenerator:
         self.max_positions = config.trading.get('max_positions', 5)
         self.cooldown_minutes = config.trading.get('cooldown_minutes', 15)
         self.confluence = ConfluenceSystem()
+        # cache for SMC decisions to avoid recomputation per symbol each scan cycle
+        self._smc_cache: Dict[str, Dict] = {}
+        self._cache_ttl = 30  # seconds
 
     def calculate_long_score(self, data: Dict[str, Any]) -> float:
         score = 0.0
@@ -378,7 +381,8 @@ class SignalGenerator:
         for data in scanned_data:
             data = self.enrich_with_orderbook(data['symbol'], data)
             
-            smc_decision = self.get_smc_decision(data)
+            symbol = data['symbol']
+            smc_decision = self._get_cached_smc_decision(symbol, data)
             
             if not smc_decision.get('entry_allowed', False):
                 continue
@@ -472,6 +476,27 @@ class SignalGenerator:
             return []
         
         return self.generate_signals(scanned)[:limit]
+    
+    def _get_cached_smc_decision(self, symbol: str, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Get cached SMC decision or compute if expired"""
+        from time import time
+        now = time()
+        
+        # Check cache
+        if symbol in self._smc_cache:
+            cache_entry = self._smc_cache[symbol]
+            if now - cache_entry['timestamp'] < self._cache_ttl:
+                return cache_entry['result']
+        
+        # Compute new decision
+        result = self.get_smc_decision(data)
+        
+        # Update cache
+        self._smc_cache[symbol] = {
+            'result': result,
+            'timestamp': now
+        }
+        return result
 
 
 signal_generator = SignalGenerator()
