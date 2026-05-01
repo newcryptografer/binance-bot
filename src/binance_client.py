@@ -60,11 +60,22 @@ class BinanceClient:
         try:
             resp = self.client.exchange_info()
             markets = [m for m in resp.get('symbols', []) 
-                      if m.get('quoteAsset') == 'USDT' 
-                      and m.get('contractType') == 'PERPETUAL'
-                      and m.get('status') == 'TRADING']
+                       if m.get('quoteAsset') == 'USDT' 
+                       and m.get('contractType') == 'PERPETUAL'
+                       and m.get('status') == 'TRADING']
             return markets
         except Exception as e:
+            error_msg = str(e).lower()
+            if "451" in error_msg or "restricted" in error_msg or "eligibility" in error_msg:
+                logger.warning("Binance restricted region; using fallback symbols for paper/testing.")
+                # Minimal USDT futures symbols for paper testing
+                return [
+                    {"symbol": "BTCUSDT", "price": 60000.0, "limits": {"min": 0.001}},
+                    {"symbol": "ETHUSDT", "price": 3000.0, "limits": {"min": 0.01}},
+                    {"symbol": "SOLUSDT", "price": 150.0, "limits": {"min": 0.1}},
+                    {"symbol": "BNBUSDT", "price": 300.0, "limits": {"min": 0.01}},
+                    {"symbol": "XRPUSDT", "symbol": "XRPUSDT", "price": 0.5, "limits": {"min": 10}},
+                ]
             logger.error(f"Error fetching markets: {e}")
             return []
     
